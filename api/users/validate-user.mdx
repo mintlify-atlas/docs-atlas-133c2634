@@ -1,0 +1,284 @@
+---
+title: 'Validar Usuario'
+description: 'Endpoints para validar usuarios en diferentes colecciones y validar email de colaboradores'
+---
+
+## Descripción
+
+Este módulo contiene tres endpoints para validación de usuarios en el sistema TMT:
+
+1. **validate_user_platform**: Valida si un email existe en una colección específica
+2. **validate_user_type**: Valida si un email existe en una colección con un tipo de cuenta específico
+3. **validate_user_email**: Valida el email de un colaborador y actualiza su estado
+
+---
+
+## 1. Validar Usuario por Plataforma
+
+<Card title="POST validate_user_platform" icon="check">
+  Verifica si un usuario existe en una colección específica de Firestore
+</Card>
+
+### Endpoint
+
+```
+POST https://us-central1-{project-id}.cloudfunctions.net/validate_user_platform
+```
+
+### Request Body
+
+<ParamField body="data" type="object" required>
+  Objeto que contiene los parámetros de validación
+  
+  <Expandable title="Propiedades">
+    <ParamField body="email" type="string" required>
+      Correo electrónico del usuario a validar
+    </ParamField>
+    
+    <ParamField body="platform" type="string" required>
+      Nombre de la colección de Firestore donde buscar (ej: `u_clients`, `u_collaborators`, `u_staff`)
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Mensaje descriptivo del resultado
+  - `"User allowed"`: Usuario encontrado
+  - `"User not allowed"`: Usuario no encontrado
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  Código de estado HTTP
+  - `200`: Usuario válido
+  - `400`: Usuario no encontrado
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <Expandable title="Propiedades">
+    <ResponseField name="valido" type="boolean">
+      `true` si el usuario existe, `false` si no existe
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Ejemplo de Request
+
+```bash
+curl -X POST https://us-central1-{project-id}.cloudfunctions.net/validate_user_platform \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "email": "juan@empresa.com",
+      "platform": "u_clients"
+    }
+  }'
+```
+
+### Ejemplo de Response
+
+```json
+{
+  "message": "User allowed",
+  "status": 200,
+  "data": {
+    "valido": true
+  }
+}
+```
+
+---
+
+## 2. Validar Usuario por Tipo de Cuenta
+
+<Card title="POST validate_user_type" icon="shield-check">
+  Verifica si un usuario existe en una colección con un tipo de cuenta específico
+</Card>
+
+### Endpoint
+
+```
+POST https://us-central1-{project-id}.cloudfunctions.net/validate_user_type
+```
+
+### Request Body
+
+<ParamField body="data" type="object" required>
+  Objeto que contiene los parámetros de validación
+  
+  <Expandable title="Propiedades">
+    <ParamField body="email" type="string" required>
+      Correo electrónico del usuario a validar
+    </ParamField>
+    
+    <ParamField body="platform" type="string" required>
+      Nombre de la colección de Firestore donde buscar
+    </ParamField>
+    
+    <ParamField body="account_type" type="string" required>
+      Tipo de cuenta a validar (ej: `admin`, `collaborator`, `business`)
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Mensaje descriptivo del resultado
+  - `"User allowed"`: Usuario encontrado con el tipo de cuenta especificado
+  - `"User not allowed"`: Usuario no encontrado o tipo de cuenta no coincide
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  Código de estado HTTP
+  - `200`: Usuario válido con el tipo de cuenta correcto
+  - `400`: Usuario no encontrado o tipo de cuenta incorrecto
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <Expandable title="Propiedades">
+    <ResponseField name="valido" type="boolean">
+      `true` si el usuario existe con el tipo de cuenta especificado, `false` en caso contrario
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Ejemplo de Request
+
+```bash
+curl -X POST https://us-central1-{project-id}.cloudfunctions.net/validate_user_type \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "email": "maria@empresa.com",
+      "platform": "u_collaborators",
+      "account_type": "collaborator"
+    }
+  }'
+```
+
+### Ejemplo de Response
+
+```json
+{
+  "message": "User allowed",
+  "status": 200,
+  "data": {
+    "valido": true
+  }
+}
+```
+
+---
+
+## 3. Validar Email de Colaborador
+
+<Card title="POST validate_user_email" icon="envelope-circle-check">
+  Valida el email de un colaborador y actualiza su estado a activo
+</Card>
+
+### Endpoint
+
+```
+POST https://us-central1-{project-id}.cloudfunctions.net/validate_user_email
+```
+
+### Request Body
+
+<ParamField body="data" type="object" required>
+  Objeto que contiene los parámetros de validación
+  
+  <Expandable title="Propiedades">
+    <ParamField body="uid_user" type="string" required>
+      UID del colaborador en Firebase
+    </ParamField>
+    
+    <ParamField body="email" type="string" required>
+      Correo electrónico a validar (debe coincidir con el del colaborador)
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Response
+
+<ResponseField name="data" type="object">
+  <Expandable title="Propiedades">
+    <ResponseField name="message" type="string">
+      Mensaje descriptivo del resultado de la operación
+    </ResponseField>
+    
+    <ResponseField name="status" type="number">
+      Código de estado HTTP
+      - `200`: Usuario validado exitosamente
+      - `400`: Parámetros faltantes
+      - `403`: Email no coincide
+      - `404`: Usuario no encontrado
+      - `500`: Error interno del servidor
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Ejemplo de Request
+
+```bash
+curl -X POST https://us-central1-{project-id}.cloudfunctions.net/validate_user_email \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "uid_user": "def456uvw789",
+      "email": "maria@empresa.com"
+    }
+  }'
+```
+
+### Ejemplo de Response Exitoso
+
+```json
+{
+  "data": {
+    "message": "Usuario validado y actualizado correctamente.",
+    "status": 200
+  }
+}
+```
+
+### Ejemplos de Errores
+
+**Parámetros faltantes:**
+```json
+{
+  "data": {
+    "message": "El UID y el correo son obligatorios.",
+    "status": 400
+  }
+}
+```
+
+**Usuario no encontrado:**
+```json
+{
+  "data": {
+    "message": "Usuario no encontrado.",
+    "status": 404
+  }
+}
+```
+
+**Email no coincide:**
+```json
+{
+  "data": {
+    "message": "El correo electrónico no coincide.",
+    "status": 403
+  }
+}
+```
+
+## Notas Adicionales
+
+- **validate_user_platform** y **validate_user_type** son útiles para verificar permisos antes de permitir acceso
+- **validate_user_email** se usa típicamente en flujos de verificación de email donde se envía un enlace con el UID y el usuario debe confirmar
+- Todos los endpoints tienen CORS habilitado con origen `*`
+- **validate_user_email** actualiza automáticamente el campo `status` a `true` cuando la validación es exitosa
+- **validate_user_email** solo funciona con la colección `u_collaborators`

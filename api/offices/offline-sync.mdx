@@ -1,0 +1,501 @@
+---
+title: "Offline Office Synchronization"
+description: "Manage offline ticket operations and synchronization for physical offices"
+---
+
+## offline_office_tickets
+
+<RequestExample>
+```bash cURL
+curl -X POST https://your-domain.com/offline_office_tickets \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "tickets_offline": ["event1-ticket1", "event1-ticket2"],
+      "office_id": "office_123",
+      "event_id": "event_456"
+    }
+  }'
+```
+</RequestExample>
+
+Transfers tickets to offline mode for physical office operations. This endpoint validates ticket availability and assigns them to a specific office for offline sales.
+
+<Note>
+Offline tickets are locked to a specific office and cannot be sold through virtual channels until they are synchronized back online.
+</Note>
+
+### Request Body
+
+<ParamField body="data" type="object" required>
+  Request data container
+  
+  <ParamField body="tickets_offline" type="array" required>
+    Array of ticket IDs to transfer to offline mode (format: "event_id-ticket_id")
+  </ParamField>
+  
+  <ParamField body="office_id" type="string" required>
+    Unique identifier for the office receiving the offline tickets
+  </ParamField>
+  
+  <ParamField body="event_id" type="string" required>
+    Unique identifier for the event associated with the tickets
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Human-readable status message
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success, 400 for validation errors)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data
+  
+  <ResponseField name="valido" type="boolean">
+    Whether the operation was successful
+  </ResponseField>
+  
+  <ResponseField name="tickets" type="array">
+    List of tickets successfully transferred to offline mode (only on success)
+  </ResponseField>
+  
+  <ResponseField name="nodisponible" type="array">
+    List of unavailable ticket IDs (only on validation failure)
+  </ResponseField>
+</ResponseField>
+
+### Offline Transfer Process
+
+<Steps>
+  <Step title="Ticket Availability Check">
+    Validates that all tickets have status=true and status_offline=false
+  </Step>
+  
+  <Step title="Block List Verification">
+    Checks that none of the tickets are in the tickets_blocked table
+  </Step>
+  
+  <Step title="Ledger Update">
+    Appends an "offline" action to each ticket's ledger with timestamp
+  </Step>
+  
+  <Step title="Status Update">
+    Sets status_offline=true in both Firestore and PostgreSQL
+  </Step>
+  
+  <Step title="Office Assignment">
+    Inserts records into tickets_offline table linking tickets to the office
+  </Step>
+</Steps>
+
+### Response Examples
+
+<ResponseExample>
+```json Success
+{
+  "message": "Tickets Tranferido offline",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "tickets": ["event1-ticket1", "event1-ticket2"]
+  }
+}
+```
+</ResponseExample>
+
+<ResponseExample>
+```json Unavailable Tickets
+{
+  "message": "Tickets no disponibles",
+  "status": 400,
+  "data": {
+    "valido": false,
+    "nodisponible": ["event1-ticket3"]
+  }
+}
+```
+</ResponseExample>
+
+---
+
+## offline_office_tickets_list_sales
+
+<RequestExample>
+```bash cURL
+curl -X POST https://your-domain.com/offline_office_tickets_list_sales \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "event_id": "event_456",
+      "office_id": "office_123"
+    }
+  }'
+```
+</RequestExample>
+
+Retrieves all offline tickets assigned to a specific office for a given event. This endpoint provides the complete ticket inventory for offline sales operations.
+
+### Request Body
+
+<ParamField body="data" type="object" required>
+  Request data container
+  
+  <ParamField body="event_id" type="string" required>
+    Unique identifier for the event
+  </ParamField>
+  
+  <ParamField body="office_id" type="string" required>
+    Unique identifier for the office
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data
+  
+  <ResponseField name="valido" type="boolean">
+    Whether tickets were found
+  </ResponseField>
+  
+  <ResponseField name="response" type="array">
+    Array of ticket objects with full details
+    
+    <ResponseField name="id" type="string">
+      Internal ticket identifier
+    </ResponseField>
+    
+    <ResponseField name="ticket_id" type="string">
+      Composite ticket ID (event_id-ticket_id)
+    </ResponseField>
+    
+    <ResponseField name="event_id" type="string">
+      Event identifier
+    </ResponseField>
+    
+    <ResponseField name="event_name" type="string">
+      Event name
+    </ResponseField>
+    
+    <ResponseField name="event_description" type="string">
+      Event description
+    </ResponseField>
+    
+    <ResponseField name="zone" type="string">
+      Seating zone
+    </ResponseField>
+    
+    <ResponseField name="seat_row" type="string">
+      Seat row number
+    </ResponseField>
+    
+    <ResponseField name="seat_id" type="string">
+      Seat identifier
+    </ResponseField>
+    
+    <ResponseField name="color" type="string">
+      Zone color code
+    </ResponseField>
+    
+    <ResponseField name="status" type="boolean">
+      Ticket availability (computed: false if sold, true if available)
+    </ResponseField>
+    
+    <ResponseField name="ledger" type="array">
+      Transaction history for the ticket
+    </ResponseField>
+    
+    <ResponseField name="date_created" type="timestamp">
+      Ticket creation date
+    </ResponseField>
+    
+    <ResponseField name="date_updated" type="timestamp">
+      Last update timestamp
+    </ResponseField>
+    
+    <ResponseField name="date_start" type="timestamp">
+      Event start date
+    </ResponseField>
+    
+    <ResponseField name="date_end" type="timestamp">
+      Event end date
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+---
+
+## offline_office_tickets_unassign
+
+<RequestExample>
+```bash cURL
+curl -X POST https://your-domain.com/offline_office_tickets_unassign \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "tickets_offline": ["event1-ticket1", "event1-ticket2"],
+      "office_id": "office_123",
+      "event_id": "event_456"
+    }
+  }'
+```
+</RequestExample>
+
+Returns offline tickets back to online availability. This endpoint removes the office assignment and makes tickets available for virtual sales again.
+
+### Request Body
+
+<ParamField body="data" type="object" required>
+  Request data container
+  
+  <ParamField body="tickets_offline" type="array" required>
+    Array of ticket IDs to return to online mode
+  </ParamField>
+  
+  <ParamField body="office_id" type="string" required>
+    Office identifier (for tracking purposes)
+  </ParamField>
+  
+  <ParamField body="event_id" type="string" required>
+    Event identifier (for tracking purposes)
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data
+  
+  <ResponseField name="valido" type="boolean">
+    Always true on success
+  </ResponseField>
+  
+  <ResponseField name="tickets" type="array">
+    List of tickets returned to online mode
+  </ResponseField>
+</ResponseField>
+
+### Unassignment Process
+
+<Steps>
+  <Step title="Ledger Update">
+    Appends an "unassign" action to each ticket's ledger
+  </Step>
+  
+  <Step title="Status Update">
+    Sets status_offline=false in both Firestore and PostgreSQL
+  </Step>
+  
+  <Step title="Office Removal">
+    Deletes records from tickets_offline table
+  </Step>
+  
+  <Step title="Availability Restoration">
+    Tickets become available for virtual office sales
+  </Step>
+</Steps>
+
+---
+
+## offline_office_tickets_synchronization
+
+<RequestExample>
+```bash cURL
+curl -X POST https://your-domain.com/offline_office_tickets_synchronization \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "ticket_sold": [
+        {
+          "ticket": "event1-ticket1",
+          "transactions": [...],
+          "amount": 100.00,
+          "event_id": "event_456",
+          "event_name": "Concert 2026",
+          "office_id": "office_123",
+          "office_name": "Main Office",
+          "status": "paid",
+          "tickets": [...],
+          "client_id": "client_789",
+          "client_name": "John Doe"
+        }
+      ]
+    }
+  }'
+```
+</RequestExample>
+
+Synchronizes offline ticket sales with the main system. This endpoint processes sales made while the office was offline and creates corresponding orders in the system.
+
+<Note>
+This function is currently under development. It calls the order_created function to process each offline sale.
+</Note>
+
+### Request Body
+
+<ParamField body="data" type="object" required>
+  Request data container
+  
+  <ParamField body="ticket_sold" type="array" required>
+    Array of offline sale objects to synchronize
+    
+    <ParamField body="ticket" type="string" required>
+      Ticket ID that was sold offline
+    </ParamField>
+    
+    <ParamField body="transactions" type="array" required>
+      Transaction details for the sale
+    </ParamField>
+    
+    <ParamField body="amount" type="number" required>
+      Total sale amount
+    </ParamField>
+    
+    <ParamField body="event_id" type="string" required>
+      Event identifier
+    </ParamField>
+    
+    <ParamField body="event_name" type="string" required>
+      Event name
+    </ParamField>
+    
+    <ParamField body="office_id" type="string" required>
+      Office that made the sale
+    </ParamField>
+    
+    <ParamField body="office_name" type="string" required>
+      Office name
+    </ParamField>
+    
+    <ParamField body="status" type="string" required>
+      Order status (e.g., "paid")
+    </ParamField>
+    
+    <ParamField body="tickets" type="array" required>
+      Full ticket details
+    </ParamField>
+    
+    <ParamField body="client_id" type="string" required>
+      Customer identifier
+    </ParamField>
+    
+    <ParamField body="client_name" type="string" required>
+      Customer name
+    </ParamField>
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data
+  
+  <ResponseField name="valido" type="boolean">
+    Whether synchronization was successful
+  </ResponseField>
+</ResponseField>
+
+### Synchronization Process
+
+When an office reconnects after being offline:
+
+1. Collect all sales made during offline period
+2. Submit sales data to this endpoint
+3. System creates orders via `order_created` function
+4. Updates ticket status and ledger
+5. Confirms synchronization to office
+
+---
+
+## offline_tickets_list_event_sales
+
+<RequestExample>
+```bash cURL
+curl -X POST https://your-domain.com/offline_tickets_list_event_sales \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "event_id": "event_456"
+    }
+  }'
+```
+</RequestExample>
+
+Retrieves all tickets for an event, including their offline status. This provides a comprehensive view of ticket availability across both online and offline channels.
+
+### Request Body
+
+<ParamField body="data" type="object" required>
+  Request data container
+  
+  <ParamField body="event_id" type="string" required>
+    Event identifier
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data
+  
+  <ResponseField name="valido" type="boolean">
+    Whether the event was found
+  </ResponseField>
+  
+  <ResponseField name="response" type="array">
+    Array of tickets with offline status information
+    
+    <ResponseField name="status" type="boolean">
+      Computed availability (false if blocked or unavailable, true if available)
+    </ResponseField>
+    
+    <ResponseField name="status_offline" type="boolean">
+      Whether the ticket is assigned to an offline office
+    </ResponseField>
+    
+    <ResponseField name="status_real" type="boolean">
+      Actual ticket status before computation
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+<Note>
+This endpoint performs a LEFT JOIN with tickets_blocked to show real-time blocking status alongside offline assignments.
+</Note>

@@ -1,0 +1,225 @@
+---
+title: "Office Validation"
+description: "Validate office access using PIN authentication and manage office security"
+---
+
+## office_validate
+
+<RequestExample>
+```bash cURL
+curl -X POST https://your-domain.com/office_validate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "idoffice": "office_123",
+      "pin": "1234",
+      "idcollaborators": "collab_456"
+    }
+  }'
+```
+</RequestExample>
+
+Validates office access by verifying the collaborator's status and PIN authentication. This endpoint ensures that only active collaborators with the correct PIN can access the office.
+
+<Note>
+The PIN validation system checks both collaborator status and PIN match before granting access. The last access timestamp is automatically updated upon successful validation.
+</Note>
+
+### Request Body
+
+<ParamField body="data" type="object" required>
+  Request data container
+  
+  <ParamField body="idoffice" type="string" required>
+    Unique identifier for the office to validate
+  </ParamField>
+  
+  <ParamField body="pin" type="string" required>
+    PIN code for office access authentication
+  </ParamField>
+  
+  <ParamField body="idcollaborators" type="string" required>
+    Unique identifier for the collaborator requesting access
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Human-readable status message indicating the validation result
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success, 400 for failure)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Validation result data
+  
+  <ResponseField name="valido" type="boolean">
+    Whether the office access is valid
+  </ResponseField>
+</ResponseField>
+
+### Validation Process
+
+<Steps>
+  <Step title="Collaborator Verification">
+    The system first checks if the collaborator exists in the office's collaborator collection
+  </Step>
+  
+  <Step title="Status Check">
+    Verifies that the collaborator has an active status in the office
+  </Step>
+  
+  <Step title="PIN Authentication">
+    Validates the provided PIN against the office's security collection
+  </Step>
+  
+  <Step title="Timestamp Update">
+    Updates the last access date in the security collection upon successful validation
+  </Step>
+</Steps>
+
+### Response Examples
+
+<ResponseExample>
+```json Success
+{
+  "message": "Oficce allowed",
+  "status": 200,
+  "data": {
+    "valido": true
+  }
+}
+```
+</ResponseExample>
+
+<ResponseExample>
+```json Invalid PIN
+{
+  "message": "Oficce not allowed",
+  "status": 400,
+  "data": {
+    "valido": false
+  }
+}
+```
+</ResponseExample>
+
+<ResponseExample>
+```json Inactive Collaborator
+{
+  "message": "Usuario no activo en la taquilla",
+  "status": 400,
+  "data": {
+    "valido": false
+  }
+}
+```
+</ResponseExample>
+
+<ResponseExample>
+```json Unassociated Collaborator
+{
+  "message": "Usuario no asociado con la taquilla",
+  "status": 400,
+  "data": {
+    "valido": false
+  }
+}
+```
+</ResponseExample>
+
+---
+
+## office_pin_set
+
+<RequestExample>
+```bash cURL
+curl -X POST https://your-domain.com/office_pin_set \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "idoffice": "office_123",
+      "pin": "1234"
+    }
+  }'
+```
+</RequestExample>
+
+Sets or updates the PIN code for office access. This endpoint creates or overwrites the access PIN in the office's security collection.
+
+<Note>
+Setting a new PIN will immediately replace any existing PIN. Both created and updated timestamps are recorded for audit purposes.
+</Note>
+
+### Request Body
+
+<ParamField body="data" type="object" required>
+  Request data container
+  
+  <ParamField body="idoffice" type="string" required>
+    Unique identifier for the office where the PIN will be set
+  </ParamField>
+  
+  <ParamField body="pin" type="string" required>
+    New PIN code to set for office access (numeric string)
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Human-readable status message indicating the operation result
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success, 400 for failure)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Operation result data
+  
+  <ResponseField name="valido" type="boolean">
+    Whether the PIN was successfully set
+  </ResponseField>
+</ResponseField>
+
+### Security Collection Structure
+
+The PIN is stored in the following Firestore path:
+```
+offices/{idoffice}/security/access_pin
+```
+
+With the following document structure:
+- `date.created`: Timestamp of when the PIN was first created
+- `date.updated`: Timestamp of last PIN update
+- `pin`: The PIN value (string)
+
+### Response Examples
+
+<ResponseExample>
+```json Success
+{
+  "message": "Office: Pin Seteado!",
+  "status": 200,
+  "data": {
+    "valido": true
+  }
+}
+```
+</ResponseExample>
+
+<ResponseExample>
+```json Error
+{
+  "message": "Office: Error al crear",
+  "status": 400,
+  "data": {
+    "valido": false
+  }
+}
+```
+</ResponseExample>

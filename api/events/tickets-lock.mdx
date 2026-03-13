@@ -1,0 +1,352 @@
+---
+title: 'Lock/Unlock Tickets'
+api: 'POST https://us-central1-tmt-system.cloudfunctions.net/tickets_lock'
+description: 'Temporarily lock tickets during the purchase process to prevent double-selling'
+---
+
+## Lock Tickets
+
+Temporarily reserves tickets during the checkout process. Locked tickets cannot be purchased by other users until they are unlocked or the lock expires.
+
+### Endpoint
+
+`POST https://us-central1-tmt-system.cloudfunctions.net/tickets_lock`
+
+### Request Parameters
+
+<ParamField body="data" type="object" required>
+  Request data object
+  
+  <ParamField body="data.ticketd_reserved" type="array" required>
+    Array of ticket IDs to lock
+  </ParamField>
+  
+  <ParamField body="data.reserved_time" type="number" required>
+    Lock duration in seconds from the current time
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message describing the result of the operation
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success, 400 for error)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data object
+  
+  <ResponseField name="data.valido" type="boolean">
+    Indicates whether the operation was successful
+  </ResponseField>
+  
+  <ResponseField name="data.tickets" type="array">
+    Array of successfully locked ticket IDs (only present on success)
+  </ResponseField>
+  
+  <ResponseField name="data.nodisponible" type="array">
+    Array of ticket IDs that could not be locked (only present on failure)
+  </ResponseField>
+</ResponseField>
+
+### Code Examples
+
+<CodeGroup>
+
+```javascript JavaScript
+const response = await fetch(
+  'https://us-central1-tmt-system.cloudfunctions.net/tickets_lock',
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      data: {
+        ticketd_reserved: [
+          'event_123-ticket_abc',
+          'event_123-ticket_def'
+        ],
+        reserved_time: 600 // 10 minutes
+      }
+    })
+  }
+);
+
+const result = await response.json();
+console.log(result);
+```
+
+```bash cURL
+curl -X POST \
+  https://us-central1-tmt-system.cloudfunctions.net/tickets_lock \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "data": {
+      "ticketd_reserved": ["event_123-ticket_abc", "event_123-ticket_def"],
+      "reserved_time": 600
+    }
+  }'
+```
+
+```python Python
+import requests
+
+url = "https://us-central1-tmt-system.cloudfunctions.net/tickets_lock"
+payload = {
+    "data": {
+        "ticketd_reserved": [
+            "event_123-ticket_abc",
+            "event_123-ticket_def"
+        ],
+        "reserved_time": 600
+    }
+}
+
+response = requests.post(url, json=payload)
+print(response.json())
+```
+
+</CodeGroup>
+
+### Response Examples
+
+<Expandable title="Success Response">
+
+```json
+{
+  "message": "Tickets blocked",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "tickets": [
+      "event_123-ticket_abc",
+      "event_123-ticket_def"
+    ]
+  }
+}
+```
+
+</Expandable>
+
+<Expandable title="Tickets Not Available">
+
+```json
+{
+  "message": "Tickets no disponibles",
+  "status": 400,
+  "data": {
+    "valido": false,
+    "nodisponible": [
+      "event_123-ticket_abc"
+    ]
+  }
+}
+```
+
+</Expandable>
+
+---
+
+## Unlock Tickets (Automatic)
+
+Automatically unlocks all tickets whose lock time has expired.
+
+### Endpoint
+
+`POST https://us-central1-tmt-system.cloudfunctions.net/tickets_unlock`
+
+### Request Parameters
+
+No parameters required. This endpoint checks all locked tickets and removes locks that have expired.
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message ("Actualizado")
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data object
+  
+  <ResponseField name="data.valido" type="boolean">
+    Always true for this endpoint
+  </ResponseField>
+</ResponseField>
+
+### Code Examples
+
+<CodeGroup>
+
+```javascript JavaScript
+const response = await fetch(
+  'https://us-central1-tmt-system.cloudfunctions.net/tickets_unlock',
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      data: {}
+    })
+  }
+);
+
+const result = await response.json();
+console.log(result);
+```
+
+```bash cURL
+curl -X POST \
+  https://us-central1-tmt-system.cloudfunctions.net/tickets_unlock \
+  -H 'Content-Type: application/json' \
+  -d '{"data": {}}'
+```
+
+```python Python
+import requests
+
+url = "https://us-central1-tmt-system.cloudfunctions.net/tickets_unlock"
+payload = {"data": {}}
+
+response = requests.post(url, json=payload)
+print(response.json())
+```
+
+</CodeGroup>
+
+### Response Example
+
+```json
+{
+  "message": "Actualizado",
+  "status": 200,
+  "data": {
+    "valido": true
+  }
+}
+```
+
+---
+
+## Unlock Tickets (Manual)
+
+Manually unlocks specific tickets by ticket ID.
+
+### Endpoint
+
+`POST https://us-central1-tmt-system.cloudfunctions.net/tickets_unlock_param`
+
+### Request Parameters
+
+<ParamField body="data" type="object" required>
+  Request data object
+  
+  <ParamField body="data.ticketd_reserved" type="array" required>
+    Array of ticket IDs to unlock
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message ("Actualizado")
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data object
+  
+  <ResponseField name="data.valido" type="boolean">
+    Always true for this endpoint
+  </ResponseField>
+</ResponseField>
+
+### Code Examples
+
+<CodeGroup>
+
+```javascript JavaScript
+const response = await fetch(
+  'https://us-central1-tmt-system.cloudfunctions.net/tickets_unlock_param',
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      data: {
+        ticketd_reserved: [
+          'event_123-ticket_abc',
+          'event_123-ticket_def'
+        ]
+      }
+    })
+  }
+);
+
+const result = await response.json();
+console.log(result);
+```
+
+```bash cURL
+curl -X POST \
+  https://us-central1-tmt-system.cloudfunctions.net/tickets_unlock_param \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "data": {
+      "ticketd_reserved": ["event_123-ticket_abc", "event_123-ticket_def"]
+    }
+  }'
+```
+
+```python Python
+import requests
+
+url = "https://us-central1-tmt-system.cloudfunctions.net/tickets_unlock_param"
+payload = {
+    "data": {
+        "ticketd_reserved": [
+            "event_123-ticket_abc",
+            "event_123-ticket_def"
+        ]
+    }
+}
+
+response = requests.post(url, json=payload)
+print(response.json())
+```
+
+</CodeGroup>
+
+### Response Example
+
+```json
+{
+  "message": "Actualizado",
+  "status": 200,
+  "data": {
+    "valido": true
+  }
+}
+```
+
+## Lock Mechanism Notes
+
+- Tickets are locked in the `tickets_blocked` table with an expiration timestamp (`locked_up`)
+- The lock prevents other users from locking or purchasing the same tickets
+- Locked tickets are not shown as available in sales listings
+- Automatic cleanup runs via `tickets_unlock` to remove expired locks
+- Manual unlock via `tickets_unlock_param` should be used when a user cancels their purchase
+- Recommended lock duration is 5-15 minutes for typical checkout flows
+- Always unlock tickets if the transaction fails or is cancelled

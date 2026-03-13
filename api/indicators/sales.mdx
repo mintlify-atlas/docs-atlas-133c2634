@@ -1,0 +1,312 @@
+---
+title: 'Sales Indicators'
+description: 'API endpoints for tracking sales metrics and ticket sales data'
+---
+
+## Total Sales
+
+`POST /total_sales`
+
+Retrieves total sales amounts grouped by date for a specific event or date range. Calculates the sum of all transactions and provides a breakdown by date.
+
+### Request Parameters
+
+<ParamField body="event_id" type="string" optional>
+  The unique identifier of the event to filter sales data
+</ParamField>
+
+<ParamField body="from" type="string" optional>
+  Start date for filtering sales (format: YYYY-MM-DD)
+</ParamField>
+
+<ParamField body="to" type="string" optional>
+  End date for filtering sales (format: YYYY-MM-DD)
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Response message description
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="totales_date" type="array">
+    Array of sales totals grouped by date
+    <ResponseField name="date" type="string">
+      Date of the sales (YYYY-MM-DD format)
+    </ResponseField>
+    <ResponseField name="total" type="number">
+      Total sales amount for that date
+    </ResponseField>
+  </ResponseField>
+
+  <ResponseField name="totales" type="number">
+    Grand total of all sales across all dates in the range
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```json
+{
+  "data": {
+    "event_id": "evt_123456",
+    "from": "2024-01-01",
+    "to": "2024-01-31"
+  }
+}
+```
+
+### Example Response
+
+```json
+{
+  "message": "Total Ventas ",
+  "status": 200,
+  "data": {
+    "totales_date": [
+      {
+        "date": "2024-01-15",
+        "total": 5000.00
+      },
+      {
+        "date": "2024-01-16",
+        "total": 7500.00
+      }
+    ],
+    "totales": 12500.00
+  }
+}
+```
+
+---
+
+## Total Sales by Client
+
+`POST /total_sales_client`
+
+Retrieves total sales amounts grouped by date for a specific client. Similar to total_sales but filtered by client_id instead of event_id.
+
+### Request Parameters
+
+<ParamField body="client_id" type="string" optional>
+  The unique identifier of the client to filter sales data
+</ParamField>
+
+<ParamField body="from" type="string" optional>
+  Start date for filtering sales (format: YYYY-MM-DD)
+</ParamField>
+
+<ParamField body="to" type="string" optional>
+  End date for filtering sales (format: YYYY-MM-DD)
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Response message description
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="totales_date" type="array">
+    Array of sales totals grouped by date for the specified client
+    <ResponseField name="date" type="string">
+      Date of the sales (YYYY-MM-DD format)
+    </ResponseField>
+    <ResponseField name="total" type="number">
+      Total sales amount for that date
+    </ResponseField>
+  </ResponseField>
+
+  <ResponseField name="totales" type="number">
+    Grand total of all sales for the client across all dates
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```json
+{
+  "data": {
+    "client_id": "client_789",
+    "from": "2024-01-01",
+    "to": "2024-01-31"
+  }
+}
+```
+
+### Example Response
+
+```json
+{
+  "message": "Total Ventas por clientes",
+  "status": 200,
+  "data": {
+    "totales_date": [
+      {
+        "date": "2024-01-15",
+        "total": 3000.00
+      },
+      {
+        "date": "2024-01-20",
+        "total": 4500.00
+      }
+    ],
+    "totales": 7500.00
+  }
+}
+```
+
+---
+
+## Number of Tickets Sold
+
+`POST /number_tickets_sold`
+
+Retrieves the total number of tickets sold for a specific event or date range. Counts the actual number of individual tickets in all orders.
+
+### Request Parameters
+
+<ParamField body="event_id" type="string" optional>
+  The unique identifier of the event to filter ticket sales
+</ParamField>
+
+<ParamField body="from" type="string" optional>
+  Start date for filtering ticket sales (format: YYYY-MM-DD)
+</ParamField>
+
+<ParamField body="to" type="string" optional>
+  End date for filtering ticket sales (format: YYYY-MM-DD)
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Response message description
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="sold" type="array">
+    Array containing sold ticket information
+    <ResponseField name="seats_sold" type="number">
+      Total number of tickets sold in the specified period
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```json
+{
+  "data": {
+    "event_id": "evt_123456",
+    "from": "2024-01-01",
+    "to": "2024-01-31"
+  }
+}
+```
+
+### Example Response
+
+```json
+{
+  "message": "Datos cantidad de tickets vendidos ",
+  "status": 200,
+  "data": {
+    "sold": [
+      {
+        "seats_sold": 1250
+      }
+    ]
+  }
+}
+```
+
+---
+
+## Tickets Allocated vs Sold
+
+`POST /number_tickets_vs_sold`
+
+Compares the total number of tickets allocated for an event against the number of tickets sold. Provides both absolute numbers and the percentage of tickets sold.
+
+### Request Parameters
+
+<ParamField body="event_id" type="string" required>
+  The unique identifier of the event (required for this endpoint)
+</ParamField>
+
+<ParamField body="from" type="string" optional>
+  Start date for filtering ticket sales (format: YYYY-MM-DD)
+</ParamField>
+
+<ParamField body="to" type="string" optional>
+  End date for filtering ticket sales (format: YYYY-MM-DD)
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Response message description
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="sold" type="array">
+    Array containing comparison data
+    <ResponseField name="seats_allocated" type="number">
+      Total number of seats allocated for the event (from event setup/zones)
+    </ResponseField>
+    <ResponseField name="seats_sold" type="number">
+      Total number of tickets actually sold
+    </ResponseField>
+    <ResponseField name="percentage_sold" type="number">
+      Percentage of allocated seats that have been sold (0-100)
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```json
+{
+  "data": {
+    "event_id": "evt_123456",
+    "from": "2024-01-01",
+    "to": "2024-01-31"
+  }
+}
+```
+
+### Example Response
+
+```json
+{
+  "message": "Datos cantidad de tickets vs tickets vendidos ",
+  "status": 200,
+  "data": {
+    "sold": [
+      {
+        "seats_allocated": 2000,
+        "seats_sold": 1250,
+        "percentage_sold": 62.5
+      }
+    ]
+  }
+}
+```

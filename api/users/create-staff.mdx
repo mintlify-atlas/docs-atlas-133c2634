@@ -1,0 +1,168 @@
+---
+title: 'Crear Staff'
+api: 'POST https://us-central1-{project-id}.cloudfunctions.net/create_staff'
+description: 'Crea un nuevo usuario de tipo staff (personal interno) en el sistema TMT'
+---
+
+## Descripción
+
+Este endpoint permite crear un nuevo miembro del personal interno (staff) del sistema TMT. Crea un usuario en Firebase Authentication y almacena los datos del staff en la colección `u_staff` de Firestore.
+
+## Autenticación
+
+Este endpoint utiliza Firebase Functions con CORS habilitado. Se requiere autenticación mediante Firebase Authentication.
+
+## Request Body
+
+Todos los parámetros deben estar anidados dentro de un objeto `data`:
+
+<ParamField body="data" type="object" required>
+  Objeto que contiene toda la información del miembro del staff
+  
+  <Expandable title="Propiedades del objeto data">
+    <ParamField body="name" type="string" required>
+      Nombre completo del miembro del staff
+    </ParamField>
+    
+    <ParamField body="email" type="string" required>
+      Correo electrónico del staff (se usa para autenticación)
+    </ParamField>
+    
+    <ParamField body="password" type="string" required>
+      Contraseña para la cuenta del staff
+    </ParamField>
+    
+    <ParamField body="phone" type="string" required>
+      Número de teléfono del staff
+    </ParamField>
+    
+    <ParamField body="status" type="boolean" required>
+      Estado del staff (activo/inactivo)
+    </ParamField>
+    
+    <ParamField body="account_type" type="string" required>
+      Tipo de cuenta del staff
+    </ParamField>
+    
+    <ParamField body="id" type="string" required>
+      Número de identificación del staff
+    </ParamField>
+    
+    <ParamField body="id_type" type="string" required>
+      Tipo de identificación (cédula, pasaporte, etc.)
+    </ParamField>
+    
+    <ParamField body="city" type="string" required>
+      Ciudad del domicilio
+    </ParamField>
+    
+    <ParamField body="country" type="string" required>
+      País del domicilio
+    </ParamField>
+    
+    <ParamField body="line" type="string" required>
+      Dirección completa
+    </ParamField>
+    
+    <ParamField body="zip_code" type="string" required>
+      Código postal
+    </ParamField>
+    
+    <ParamField body="commercial_name" type="string">
+      Nombre comercial o nombre de usuario
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Mensaje descriptivo del resultado de la operación
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  Código de estado HTTP
+  - `200`: Staff creado exitosamente
+  - `400`: Error al crear el staff
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Datos de respuesta
+  
+  <Expandable title="Propiedades">
+    <ResponseField name="uid" type="string">
+      ID único del usuario creado en Firebase (solo en caso de éxito)
+    </ResponseField>
+    
+    <ResponseField name="error" type="object">
+      Objeto con información del error (solo en caso de fallo)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Ejemplo de Request
+
+```bash
+curl -X POST https://us-central1-{project-id}.cloudfunctions.net/create_staff \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "name": "Carlos Rodríguez",
+      "email": "carlos@tmt.com",
+      "password": "SecurePass123",
+      "phone": "+506 7777-8888",
+      "status": true,
+      "account_type": "admin",
+      "id": "1-1111-2222",
+      "id_type": "cedula",
+      "city": "San José",
+      "country": "Costa Rica",
+      "line": "Oficinas TMT, Piso 3",
+      "zip_code": "10101",
+      "commercial_name": "carlos.rodriguez"
+    }
+  }'
+```
+
+## Ejemplo de Response Exitoso
+
+```json
+{
+  "message": " Ingresado con el ID: ghi789rst012 .",
+  "status": 200,
+  "data": {
+    "uid": "ghi789rst012"
+  }
+}
+```
+
+## Ejemplo de Response con Error
+
+```json
+{
+  "message": "Error creando nuevo usuario:",
+  "status": 400,
+  "data": {
+    "error": {
+      "code": "auth/email-already-exists",
+      "message": "The email address is already in use by another account."
+    }
+  }
+}
+```
+
+## Errores Comunes
+
+- **400 Bad Request**: Error al crear el usuario (email duplicado, contraseña débil, etc.)
+- **500 Internal Server Error**: Error en el servidor o en la base de datos
+
+## Notas Adicionales
+
+- El endpoint crea automáticamente un documento en la colección `u_staff` de Firestore con el UID del usuario
+- Se configura automáticamente la autenticación de dos factores (2FA) con valores por defecto:
+  - `status`: false
+  - `type`: "email"
+- El campo `timezone` se inicializa vacío y puede ser configurado posteriormente
+- La fecha de creación se registra automáticamente usando `Timestamp.now()`
+- El CORS está habilitado con origen `*` (cualquier dominio puede hacer requests)
+- Los usuarios staff típicamente tienen permisos administrativos en el sistema

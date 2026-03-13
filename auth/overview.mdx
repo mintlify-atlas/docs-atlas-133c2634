@@ -1,0 +1,318 @@
+---
+title: 'Authentication Overview'
+description: 'Learn how TMT uses Firebase Authentication to secure API endpoints and manage user sessions'
+---
+
+## Introduction
+
+TMT uses Firebase Authentication as its primary authentication mechanism. The system supports three distinct user types, each with specific permissions and access levels:
+
+- **Clients** (`u_clients`) - Event organizers and ticket buyers
+- **Collaborators** (`u_collaborators`) - Users associated with specific clients
+- **Staff** (`u_staff`) - Internal TMT platform administrators
+
+## Firebase Auth Integration
+
+All user creation flows leverage Firebase Authentication's `createUser` method to generate unique UIDs. These UIDs serve as document IDs in Firestore collections, creating a direct link between Firebase Auth and user data.
+
+<CodeGroup>
+```javascript Authentication Flow
+// Firebase creates the user
+const userRecord = await auth.createUser({
+  email: email,
+  password: password
+});
+
+// UID is used as Firestore document ID
+const uid = userRecord.uid;
+await db.collection('u_clients').doc(uid).set(userData);
+```
+</CodeGroup>
+
+## User Types
+
+<CardGroup cols={3}>
+  <Card title="Clients" icon="user">
+    Event organizers with full event management capabilities. Stored in `u_clients` collection.
+  </Card>
+  <Card title="Collaborators" icon="users">
+    Users linked to specific clients. Stored in `u_collaborators` collection.
+  </Card>
+  <Card title="Staff" icon="shield">
+    Platform administrators with system-wide access. Stored in `u_staff` collection.
+  </Card>
+</CardGroup>
+
+### Collection Structure
+
+Each user type is stored in a separate Firestore collection:
+
+- `u_clients` - Client users
+- `u_collaborators` - Collaborator users  
+- `u_staff` - Staff users
+
+## Authenticating API Requests
+
+### HTTP Endpoint Authentication
+
+For HTTPS callable functions, include the Firebase ID token in the request:
+
+<CodeGroup>
+```javascript Client-side
+const idToken = await firebase.auth().currentUser.getIdToken();
+
+const response = await fetch('https://your-region-project.cloudfunctions.net/endpoint', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${idToken}`
+  },
+  body: JSON.stringify({
+    data: { /* your data */ }
+  })
+});
+```
+
+```javascript Callable Functions
+// For Cloud Functions v2 callable functions
+const result = await firebase.functions().httpsCallable('functionName')({
+  param1: value1,
+  param2: value2
+});
+```
+</CodeGroup>
+
+### Validating Users
+
+The system provides several validation endpoints:
+
+<Steps>
+  <Step title="Platform Validation">
+    `validate_user_platform` checks if a user exists in a specific collection based on email.
+    
+    ```javascript
+    POST /validate_user_platform
+    {
+      "data": {
+        "platform": "u_clients",
+        "email": "user@example.com"
+      }
+    }
+    ```
+    
+    Source: `validate_user.js:11-28`
+  </Step>
+  
+  <Step title="Type Validation">
+    `validate_user_type` verifies both email and account type.
+    
+    ```javascript
+    POST /validate_user_type
+    {
+      "data": {
+        "platform": "u_clients",
+        "email": "user@example.com",
+        "account_type": "client"
+      }
+    }
+    ```
+    
+    Source: `validate_user.js:30-58`
+  </Step>
+  
+  <Step title="Email Validation">
+    `validate_user_email` confirms email ownership and activates the user.
+    
+    ```javascript
+    POST /validate_user_email
+    {
+      "data": {
+        "uid_user": "user-uid",
+        "email": "user@example.com"
+      }
+    }
+    ```
+    
+    Source: `validate_user.js:75-107`
+  </Step>
+</Steps>
+
+## Session Management
+
+TMT implements custom session management using Firebase custom claims and Firestore.
+
+### Setting Session IDs
+
+The `setSessionId` callable function manages user sessions:
+
+<CodeGroup>
+```javascript Client-side
+const setSession = firebase.functions().httpsCallable('setSessionId');
+
+const result = await setSession({
+  sessionId: 'unique-session-identifier'
+});
+```
+
+```javascript Server Implementation
+// From validate_user.js:60-73
+exports.setSessionId = functions.https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError("unauthenticated");
+
+  const uid = context.auth.uid;
+  const sessionId = data.sessionId;
+
+  // Save to Firestore
+  await admin.firestore().collection("users").doc(uid).set(
+    { sessionId }, 
+    { merge: true }
+  );
+
+  // Set as custom claim
+  await admin.auth().setCustomUserClaims(uid, { sessionId });
+
+  return { success: true };
+});
+```
+</CodeGroup>
+
+<Note>
+  The session ID is stored both in Firestore and as a Firebase custom claim, providing dual-layer session validation.
+</Note>
+
+### How It Works
+
+1. Client generates or receives a session ID
+2. Session ID is stored in Firestore under the user document
+3. Session ID is also set as a custom claim on the Firebase Auth token
+4. Custom claims are included in the ID token and can be verified server-side
+
+<Warning>
+  Custom claims may take up to an hour to propagate. Force token refresh on the client after setting session IDs:
+  
+  ```javascript
+  await firebase.auth().currentUser.getIdToken(true); // Force refresh
+  ```
+</Warning>
+
+## Security Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use HTTPS Only" icon="lock">
+    All API requests must use HTTPS to prevent token interception.
+  </Card>
+  
+  <Card title="Token Expiration" icon="clock">
+    Firebase ID tokens expire after 1 hour. Implement automatic token refresh.
+  </Card>
+  
+  <Card title="Validate on Server" icon="shield-check">
+    Always verify authentication on the server side. Never trust client-side checks.
+  </Card>
+  
+  <Card title="Secure Password Requirements" icon="key">
+    Enforce strong password policies in your client application.
+  </Card>
+</CardGroup>
+
+### CORS Configuration
+
+<Warning>
+  The current implementation uses `origin: "*"` which allows all origins. In production, restrict CORS to specific domains:
+  
+  ```javascript
+  const cors = require("cors")({
+    origin: ["https://yourdomain.com", "https://app.yourdomain.com"]
+  });
+  ```
+</Warning>
+
+### Authentication Context
+
+For callable functions, authentication context is automatically provided:
+
+<CodeGroup>
+```javascript Checking Authentication
+exports.myFunction = functions.https.onCall(async (data, context) => {
+  // Check if user is authenticated
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      'unauthenticated',
+      'User must be authenticated'
+    );
+  }
+  
+  // Get user UID
+  const uid = context.auth.uid;
+  
+  // Access custom claims
+  const sessionId = context.auth.token.sessionId;
+  
+  // Your function logic
+});
+```
+</CodeGroup>
+
+### Input Validation
+
+<Tip>
+  Always validate user input on the server side. Check for required fields and data types:
+  
+  ```javascript
+  if (!data.email || !data.uid_user) {
+    return res.status(400).json({
+      data: { 
+        message: 'Email and UID are required', 
+        status: 400 
+      }
+    });
+  }
+  ```
+</Tip>
+
+## Error Handling
+
+The authentication system returns standardized error responses:
+
+<CodeGroup>
+```json Success Response
+{
+  "message": "User allowed",
+  "status": 200,
+  "data": {
+    "valido": true
+  }
+}
+```
+
+```json Error Response
+{
+  "message": "User not allowed",
+  "status": 400,
+  "data": {
+    "valido": false
+  }
+}
+```
+
+```json Validation Error
+{
+  "data": {
+    "message": "Email and UID are required",
+    "status": 400
+  }
+}
+```
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="User Management" icon="users" href="/auth/users">
+    Learn about user data structures and creation functions
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/users/create-client">
+    Explore all available authentication endpoints
+  </Card>
+</CardGroup>

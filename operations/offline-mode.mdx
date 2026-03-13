@@ -1,0 +1,405 @@
+---
+title: 'Offline Mode'
+description: 'Ticket synchronization and offline operations for ticket offices'
+---
+
+## Overview
+
+The offline mode system allows ticket offices to operate without continuous internet connectivity by assigning tickets to specific offices for offline sales. The system handles ticket assignment, status tracking, and synchronization back to the main database.
+
+## Offline Workflow
+
+<Steps>
+  <Step title="Ticket Assignment">
+    Assign available tickets to an office for offline operation
+  </Step>
+  
+  <Step title="Offline Sales">
+    Tickets are marked as offline and can be sold without real-time connectivity
+  </Step>
+  
+  <Step title="Synchronization">
+    When connectivity returns, offline sales are synchronized with the main system
+  </Step>
+  
+  <Step title="Unassignment">
+    Unused tickets can be returned to the online pool
+  </Step>
+</Steps>
+
+## Data Structures
+
+### Ticket Ledger
+
+Each ticket maintains a ledger tracking all state changes:
+
+```javascript
+{
+  "date": Timestamp,
+  "action": "offline" | "unassign" | "accessed" | "came-out",
+  "metadata": "{}"
+}
+```
+
+### Offline Ticket Record
+
+```javascript
+{
+  "ticket_id": "event_id-ticket_id",
+  "date_created": Timestamp,
+  "event_id": "string",
+  "office_id": "string"
+}
+```
+
+## Functions
+
+### offline_office_tickets
+
+Assigns tickets to an office for offline operation.
+
+**Endpoint:** `POST /offline_office_tickets`
+
+**Request Body:**
+
+```json
+{
+  "data": {
+    "tickets_offline": ["event1-ticket1", "event1-ticket2"],
+    "office_id": "office_id",
+    "event_id": "event_id"
+  }
+}
+```
+
+**Validation Process:**
+
+<CodeGroup>
+
+```javascript Ticket Availability Check
+const rows_tickets = await dbpostgres.sqltmt(
+  "select", 
+  "tickets", 
+  "status, ticket_id, ledger, status_offline", 
+  " ticket_id in(" + intickets + ")"
+);
+
+let nodisponible = [];
+rows_tickets.forEach(item => {
+  if (!item.status || item.status_offline) {
+    nodisponible.push(item.ticket_id);
+  }
+});
+```
+
+```javascript Blocked Tickets Check
+const rows_tickets_blocked = await dbpostgres.sqltmt(
+  "select", 
+  "tickets_blocked", 
+  "ticket_id", 
+  " ticket_id in(" + intickets + ")"
+);
+
+rows_tickets_blocked.forEach(item => {
+  nodisponible.push(item.ticket_id);
+});
+```
+
+```javascript Update Ledger
+let resp = {};
+resp["date"] = Timestamp.now();
+resp["action"] = 'offline';
+resp["metadata"] = "{}";
+responses.push(resp);
+
+batch.update(
+  db.collection('events').doc(arr_ids[0])
+    .collection('tickets').doc(arr_ids[1]), 
+  {
+    "date.updated": Timestamp.now(),
+    "ledger": responses,
+    "status_offline": true
+  }
+);
+```
+
+</CodeGroup>
+
+**Response:**
+
+<CodeGroup>
+
+```json Success
+{
+  "message": "Tickets Tranferido offline",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "tickets": ["event1-ticket1", "event1-ticket2"]
+  }
+}
+```
+
+```json Unavailable Tickets
+{
+  "message": "Tickets no disponibles",
+  "status": 400,
+  "data": {
+    "valido": false,
+    "nodisponible": ["event1-ticket3"]
+  }
+}
+```
+
+</CodeGroup>
+
+### offline_office_tickets_list_sales
+
+Retrieves all tickets assigned to an office for offline operation.
+
+**Endpoint:** `POST /offline_office_tickets_list_sales`
+
+**Request Body:**
+
+```json
+{
+  "data": {
+    "event_id": "event_id",
+    "office_id": "office_id"
+  }
+}
+```
+
+**SQL Query:**
+
+```sql
+SELECT 
+  id, color, event_description, t.event_id, seat_id, 
+  CASE 
+    WHEN status_sold THEN false 
+    WHEN status THEN true 
+    ELSE false 
+  END status, 
+  t.ticket_id, zone, event_name, seat_row, ledger, 
+  t.date_created, date_updated, date_end, date_start
+FROM tickets t 
+INNER JOIN tickets_offline tt ON t.id = tt.ticket_id
+WHERE t.event_id = 'event_id' AND office_id = 'office_id'
+```
+
+**Response:**
+
+```json
+{
+  "message": "Tickets Encontrado para la Taquilla Offline",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "response": [
+      {
+        "id": "ticket_id",
+        "color": "#FF5733",
+        "event_description": "Concert description",
+        "seat_id": "A-12",
+        "status": true,
+        "zone": "VIP",
+        "ledger": [...]
+      }
+    ]
+  }
+}
+```
+
+### offline_office_tickets_unassign
+
+Returns tickets from offline mode back to the online pool.
+
+**Endpoint:** `POST /offline_office_tickets_unassign`
+
+**Request Body:**
+
+```json
+{
+  "data": {
+    "tickets_offline": ["event1-ticket1", "event1-ticket2"],
+    "office_id": "office_id",
+    "event_id": "event_id"
+  }
+}
+```
+
+**Implementation:**
+
+```javascript
+let resp = {};
+resp["date"] = Timestamp.now();
+resp["action"] = 'unassign';
+resp["metadata"] = "{}";
+responses.push(resp);
+
+batch.update(
+  db.collection('events').doc(arr_ids[0])
+    .collection('tickets').doc(arr_ids[1]), 
+  {
+    "date.updated": Timestamp.now(),
+    "ledger": responses,
+    "status_offline": false
+  }
+);
+
+// Delete from tickets_offline table
+await dbpostgres.sqltmt(
+  "delete", 
+  "tickets_offline", 
+  null, 
+  " ticket_id in(" + intickets + ")"
+);
+```
+
+**Response:**
+
+```json
+{
+  "message": "Tickets Tranferido online",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "tickets": ["event1-ticket1", "event1-ticket2"]
+  }
+}
+```
+
+### offline_office_tickets_synchronization
+
+Synchronizes offline sales back to the main system.
+
+**Endpoint:** `POST /offline_office_tickets_synchronization`
+
+**Request Body:**
+
+```json
+{
+  "data": {
+    "ticket_sold": [
+      {
+        "ticket": "event1-ticket1",
+        "transactions": [...],
+        "amount": 100.00,
+        "event_id": "event_id",
+        "event_name": "Concert Name",
+        "office_id": "office_id",
+        "office_name": "Office Name",
+        "status": "sold",
+        "tickets": [...],
+        "client_id": "client_id",
+        "client_name": "John Doe"
+      }
+    ]
+  }
+}
+```
+
+<Warning>
+  This function is marked as incomplete in the source code. It creates orders via callable function but may need additional implementation.
+</Warning>
+
+## Synchronization Process
+
+<Steps>
+  <Step title="Dual Database Update">
+    Updates are applied to both Firestore and PostgreSQL databases simultaneously using batch operations
+  </Step>
+  
+  <Step title="Ledger Tracking">
+    All ticket state changes are recorded in the ledger array with timestamps and action types
+  </Step>
+  
+  <Step title="Status Flags">
+    The `status_offline` flag indicates whether a ticket is currently assigned to an office for offline operation
+  </Step>
+  
+  <Step title="Atomic Operations">
+    Batch commits ensure all updates succeed or fail together, maintaining data consistency
+  </Step>
+</Steps>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Assignment Strategy" icon="ticket">
+    - Only assign tickets that are truly needed offline
+    - Monitor ticket availability before assignment
+    - Check for blocked tickets before assignment
+    - Return unused tickets promptly
+  </Card>
+  
+  <Card title="Synchronization" icon="rotate">
+    - Synchronize sales as soon as connectivity is restored
+    - Validate all ticket states before sync
+    - Handle conflicts with latest timestamp wins
+    - Log all sync operations for audit
+  </Card>
+</CardGroup>
+
+<Note>
+  Tickets are identified using a composite format: `event_id-ticket_id`. This must be split when updating individual collections.
+</Note>
+
+## Ticket States
+
+| State | Description | `status` | `status_offline` |
+|-------|-------------|----------|------------------|
+| Available Online | Ticket available for online purchase | `true` | `false` |
+| Assigned Offline | Ticket assigned to office | `true` | `true` |
+| Sold Offline | Ticket sold through office | `false` | `true` |
+| Blocked | Ticket temporarily blocked | varies | varies |
+
+<Info>
+  Source: `~/workspace/source/functions/events/offline_office/offline_office.js:29-224`
+</Info>
+
+## Database Operations
+
+The offline mode system uses dual-database architecture:
+
+### Firestore Operations
+
+```javascript
+var batch = db.batch();
+batch.update(
+  db.collection('events').doc(event_id).collection('tickets').doc(ticket_id),
+  { "status_offline": true, "ledger": responses }
+);
+await batch.commit();
+```
+
+### PostgreSQL Operations
+
+```javascript
+await dbpostgres.sqltmt(
+  "update", 
+  "tickets", 
+  "status_offline=tmp.status_offline, ledger=tmp.ledger",
+  "ticket_id = tmp.ticket"
+);
+```
+
+<Tip>
+  Always update both databases in sequence. Use batch operations in Firestore and multi-row updates in PostgreSQL for optimal performance.
+</Tip>
+
+## Error Handling
+
+- **Unavailable tickets**: Returns list of tickets that cannot be assigned (already sold or offline)
+- **Blocked tickets**: Checks separate `tickets_blocked` table to prevent assignment
+- **Invalid tickets**: Non-existent ticket IDs are caught during validation
+- **Sync failures**: Monitor callable function responses for order creation
+
+## Ledger Actions
+
+| Action | Description | Context |
+|--------|-------------|----------|
+| `offline` | Ticket assigned to office | Assignment |
+| `unassign` | Ticket returned to online | Unassignment |
+| `accessed` | Ticket scanned for entry | Access control |
+| `came-out` | Ticket holder exited venue | Access control |

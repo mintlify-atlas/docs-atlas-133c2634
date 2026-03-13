@@ -1,0 +1,407 @@
+---
+title: Facturación Digital
+description: Emisión automática de facturas electrónicas integrada con el flujo de órdenes
+---
+
+# Facturación Digital
+
+La facturación digital en TMT está completamente integrada con el flujo de procesamiento de órdenes, permitiendo la emisión automática de facturas electrónicas válidas fiscalmente a través de TFHKA.
+
+## Emisión Automática de Facturas
+
+### Función: `billing_emision`
+
+Función principal para emitir facturas electrónicas:
+
+```javascript billing_emision.js
+exports.billing_emision = functions.onRequest(async (req, res) => {
+  cors(req, res, async () => {
+    try {
+      const result = await emitirFacturaCore(req.body.data);
+      
+      if (result.success) {
+        res.status(200).json({
+          message: "Factura emitida exitosamente",
+          status: 200,
+          data: result.data
+        });
+      } else {
+        res.status(400).json({
+          message: "Error al emitir factura",
+          status: 400,
+          error: result.error
+        });
+      }
+    } catch (error) {
+      res.status(500).json({
+        message: "Error interno",
+        status: 500,
+        error: error.message
+      });
+    }
+  });
+});
+```
+
+## Estructura de Datos de Factura
+
+### Datos del Cliente
+
+```javascript
+const clienteData = {
+  tipoDocumentoId: "J",        // V, J, E, G, P
+  documentoId: "123456789",
+  razonSocial: "EMPRESA EJEMPLO C.A.",
+  nombreComercial: "Empresa Ejemplo",
+  direccion: "Av. Principal, Caracas",
+  telefono: "0212-1234567",
+  email: "facturacion@ejemplo.com",
+  codigoPostal: "1010"
+};
+```
+
+### Detalles de la Factura
+
+```javascript
+const detalles = [
+  {
+    tipoItemId: 1,              // 1: Bien, 2: Servicio
+    codigoItem: "TICKET-VIP",
+    descripcion: "Boleto VIP - Evento Musical",
+    cantidad: 2,
+    unidadMedida: "UND",
+    precioUnitario: 150.00,
+    descuento: 0,
+    tasaImpuesto: 16,           // % IVA
+    montoImpuesto: 48.00,
+    total: 348.00
+  }
+];
+```
+
+### Documento Completo
+
+```javascript
+const facturaData = {
+  controlNumero: "0001-00000001",
+  tipoDocumentoId: 1,           // 1: Factura, 2: Nota de débito, etc.
+  fecha: "2024-03-13",
+  fechaVencimiento: "2024-03-20",
+  observacion: "Venta de boletos para evento",
+  moneda: "VES",                // VES, USD
+  tasaCambio: 1.0,
+  cliente: clienteData,
+  detalles: detalles,
+  totalNeto: 300.00,
+  totalDescuento: 0,
+  totalImpuesto: 48.00,
+  totalGeneral: 348.00,
+  formaPago: "TRANSFERENCIA"
+};
+```
+
+## Integración con Órdenes
+
+### Función: `process_order_billing`
+
+Esta función se ejecuta automáticamente cuando se procesa una orden:
+
+```javascript order.js
+// Dentro de order_process
+if (orderData.generate_invoice && clientData.fiscal_info) {
+  const billingData = await generateBillingDataFromOrder(orderData, clientData);
+  const invoiceNumber = await getNextInvoiceNumber(clientData.client_id);
+  
+  billingData.controlNumero = invoiceNumber;
+  
+  const billingResult = await emitirFacturaCore(billingData);
+  
+  if (billingResult.success) {
+    // Guardar referencia de factura en la orden
+    await db.collection('orders').doc(orderId).update({
+      invoice: {
+        controlNumero: invoiceNumber,
+        status: 'emitted',
+        emittedAt: Timestamp.now(),
+        data: billingResult.data
+      }
+    });
+    
+    // Enviar factura por correo
+    await sendInvoiceEmail(billingData.cliente.email, billingResult.data);
+  }
+}
+```
+
+## Generación de Datos desde Orden
+
+### Función: `generateBillingDataFromOrder`
+
+Convierte una orden en datos de factura:
+
+```javascript
+function generateBillingDataFromOrder(order, client) {
+  const detalles = order.tickets.map(ticket => ({
+    tipoItemId: 2,              // Servicio
+    codigoItem: ticket.zone,
+    descripcion: `Boleto ${ticket.zone} - ${order.event_name}`,
+    cantidad: 1,
+    precioUnitario: ticket.price,
+    descuento: ticket.discount || 0,
+    tasaImpuesto: 16,
+    montoImpuesto: (ticket.price * 0.16),
+    total: ticket.price * 1.16
+  }));
+  
+  const totalNeto = order.amount;
+  const totalImpuesto = totalNeto * 0.16;
+  
+  return {
+    tipoDocumentoId: 1,
+    fecha: moment().format('YYYY-MM-DD'),
+    observacion: `Venta de ${order.tickets.length} boletos - ${order.event_name}`,
+    moneda: order.currency || 'VES',
+    cliente: {
+      tipoDocumentoId: client.id_type,
+      documentoId: client.id,
+      razonSocial: client.name,
+      direccion: client.address.line,
+      telefono: client.phone,
+      email: client.email
+    },
+    detalles: detalles,
+    totalNeto: totalNeto,
+    totalImpuesto: totalImpuesto,
+    totalGeneral: totalNeto + totalImpuesto
+  };
+}
+```
+
+## Numeración de Facturas
+
+### Función: `getNextInvoiceNumber`
+
+Obtiene el siguiente número de factura secuencial:
+
+```javascript
+async function getNextInvoiceNumber(clientId) {
+  const counterRef = db.collection('billing_counters').doc(clientId);
+  
+  return await db.runTransaction(async (transaction) => {
+    const counterDoc = await transaction.get(counterRef);
+    
+    let currentNumber = 1;
+    if (counterDoc.exists) {
+      currentNumber = counterDoc.data().lastNumber + 1;
+    }
+    
+    transaction.set(counterRef, {
+      lastNumber: currentNumber,
+      updatedAt: Timestamp.now()
+    }, { merge: true });
+    
+    // Formato: 0001-00000001
+    const serie = "0001";
+    const numero = currentNumber.toString().padStart(8, '0');
+    return `${serie}-${numero}`;
+  });
+}
+```
+
+<Warning>
+La numeración de facturas es crítica. Cada número debe ser único y secuencial según las normas fiscales. Usa transacciones de Firestore para evitar duplicados.
+</Warning>
+
+## Conversión de Montos a Letras
+
+TMT utiliza la librería `numero-a-letras` para convertir montos a texto:
+
+```javascript
+const numeroALetras = require('numero-a-letras');
+
+const montoEnLetras = numeroALetras(348.00, {
+  plural: 'BOLÍVARES',
+  singular: 'BOLÍVAR',
+  centPlural: 'CÉNTIMOS',
+  centSingular: 'CÉNTIMO'
+});
+
+// Resultado: "TRESCIENTOS CUARENTA Y OCHO BOLÍVARES CON 00/100 CÉNTIMOS"
+```
+
+## Anulación de Facturas
+
+### Función: `anularDocumento`
+
+Para anular una factura previamente emitida:
+
+```javascript
+exports.anularDocumento = functions.onRequest(async (req, res) => {
+  try {
+    const { controlNumero, motivo } = req.body.data;
+    
+    const data = await callApi("/api/Anular", {
+      controlNumero: controlNumero,
+      motivo: motivo,
+      fecha: moment().format('YYYY-MM-DD')
+    });
+    
+    // Actualizar estado en Firestore
+    await db.collection('invoices')
+      .where('controlNumero', '==', controlNumero)
+      .get()
+      .then(snapshot => {
+        snapshot.forEach(doc => {
+          doc.ref.update({
+            status: 'annulled',
+            annulledAt: Timestamp.now(),
+            annulmentReason: motivo
+          });
+        });
+      });
+    
+    res.status(200).json({
+      message: "Factura anulada exitosamente",
+      data: data
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.response?.data || error.message
+    });
+  }
+});
+```
+
+## Retenciones Fiscales
+
+### Función: `aplicarRetencion`
+
+Para aplicar retenciones de IVA o ISLR:
+
+```javascript
+const retencionData = {
+  controlNumero: "0001-00000001",
+  tipoRetencionId: 1,           // 1: IVA, 2: ISLR
+  porcentaje: 75,               // % a retener
+  monto: 36.00,                 // Monto retenido
+  numeroComprobante: "0001-00000010",
+  fechaComprobante: "2024-03-13"
+};
+
+const result = await callApi("/api/AplicarRetencion", retencionData);
+```
+
+## Envío de Facturas por Correo
+
+### Función: `correoEnviar`
+
+Envía la factura al correo del cliente:
+
+```javascript
+const emailData = {
+  controlNumero: "0001-00000001",
+  destinatarios: ["cliente@ejemplo.com"],
+  asunto: "Factura Electrónica - Venta de Boletos",
+  mensaje: "Adjunto encontrará su factura electrónica.",
+  copiaOculta: ["facturacion@tmt.com"]
+};
+
+await callApi("/api/Correo/Enviar", emailData);
+```
+
+## Descarga de Facturas
+
+### Función: `descargaArchivo`
+
+Obtiene el PDF de una factura emitida:
+
+```javascript
+const pdfData = await callApi("/api/DescargaArchivo", {
+  controlNumero: "0001-00000001",
+  formato: "pdf"  // pdf, xml
+});
+
+// pdfData contiene el archivo en base64
+const buffer = Buffer.from(pdfData.archivo, 'base64');
+```
+
+## Validaciones
+
+Antes de emitir una factura, el sistema valida:
+
+<Accordion title="Validación de Cliente">
+- RIF o Cédula válida
+- Nombre o Razón Social completo
+- Dirección fiscal
+- Teléfono y email de contacto
+</Accordion>
+
+<Accordion title="Validación de Detalles">
+- Al menos un detalle en la factura
+- Precios mayores a cero
+- Cantidades positivas
+- Códigos de items únicos
+- Descripción clara de cada item
+</Accordion>
+
+<Accordion title="Validación de Montos">
+- Total neto correcto
+- Cálculo de impuestos preciso
+- Total general = neto + impuestos - descuentos
+- Moneda válida (VES, USD)
+</Accordion>
+
+## Manejo de Errores Comunes
+
+<Accordion title="Cliente sin información fiscal">
+**Error**: Cliente no tiene RIF o dirección fiscal
+
+**Solución**: Actualizar el perfil del cliente con `update_client` incluyendo todos los campos fiscales requeridos
+</Accordion>
+
+<Accordion title="Numeración agotada">
+**Error**: Se alcanzó el límite de la numeración asignada
+
+**Solución**: Solicitar nueva numeración a SENIAT y configurarla con `asignarNumeraciones`
+</Accordion>
+
+<Accordion title="Error de autenticación TFHKA">
+**Error**: Token JWT inválido o expirado
+
+**Solución**: Verificar credenciales en la configuración. El sistema reintenta automáticamente obteniendo un nuevo token
+</Accordion>
+
+## Consulta de Facturas
+
+Para consultar facturas emitidas:
+
+```javascript
+// Por número de control
+const facturas = await db.collection('invoices')
+  .where('controlNumero', '==', '0001-00000001')
+  .get();
+
+// Por cliente
+const facturasCliente = await db.collection('invoices')
+  .where('cliente.documentoId', '==', '123456789')
+  .orderBy('fecha', 'desc')
+  .limit(10)
+  .get();
+
+// Por rango de fechas
+const facturasMes = await db.collection('invoices')
+  .where('fecha', '>=', '2024-03-01')
+  .where('fecha', '<=', '2024-03-31')
+  .get();
+```
+
+## Próximos Pasos
+
+<CardGroup cols={2}>
+  <Card title="API de Facturación" icon="code" href="/api/integrations/billing">
+    Referencia completa de endpoints
+  </Card>
+  <Card title="Procesar Órdenes" icon="cart-shopping" href="/api/orders/create-order">
+    Crea órdenes con facturación automática
+  </Card>
+</CardGroup>

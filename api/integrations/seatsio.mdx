@@ -1,0 +1,584 @@
+---
+title: 'Seats.io Integration'
+description: 'API functions for managing Seats.io seating charts, events, and seat reservations'
+---
+
+## Overview
+
+The Seats.io integration provides comprehensive functionality for managing venue seating charts, events, and seat bookings through the Seats.io platform. This integration handles chart management, event creation, seat holding/booking workflow, and tag management.
+
+<Note>
+All Seats.io functions use the South America (SA) region and are configured to work with both development and production environments.
+</Note>
+
+## Chart Management
+
+### list_charts_seatsio
+
+Retrieves all available seating charts (venues) from Seats.io.
+
+**Endpoint:** `POST /list_charts_seatsio`
+
+**Request Body:**
+```json
+{
+  "data": {}
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Listado de Venues en Seatsio",
+  "status": 200,
+  "data": {
+    "charts": [
+      {
+        "id": "chart-123",
+        "name": "Main Venue",
+        "key": "main-venue",
+        "status": "PUBLISHED",
+        "tags": ["concert", "stadium"]
+      }
+    ]
+  }
+}
+```
+
+<ResponseField name="charts" type="array">
+  Array of chart objects representing venues
+  <ResponseField name="id" type="string">
+    Unique chart identifier
+  </ResponseField>
+  <ResponseField name="name" type="string">
+    Display name of the venue
+  </ResponseField>
+  <ResponseField name="key" type="string">
+    Chart key for API operations
+  </ResponseField>
+  <ResponseField name="status" type="string">
+    Publication status (PUBLISHED, DRAFT)
+  </ResponseField>
+  <ResponseField name="tags" type="array">
+    Array of string tags associated with the chart
+  </ResponseField>
+</ResponseField>
+
+### list_objects_charts_seatsio
+
+Retrieves summary information about objects (seats, tables, etc.) in a specific chart grouped by category.
+
+**Endpoint:** `POST /list_objects_charts_seatsio`
+
+**Request Body:**
+<ParamField body="chart_id" type="string" required>
+  The unique identifier of the chart to query
+</ParamField>
+
+```json
+{
+  "data": {
+    "chart_id": "chart-123"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Listado de Objetos en Seatsio",
+  "status": 200,
+  "data": {
+    "summary_object": {
+      "VIP": {
+        "count": 50,
+        "byStatus": {
+          "free": 45,
+          "booked": 5
+        }
+      },
+      "General": {
+        "count": 200,
+        "byStatus": {
+          "free": 180,
+          "booked": 20
+        }
+      }
+    }
+  }
+}
+```
+
+### copy_chart_seatsio
+
+Creates a copy of an existing seating chart.
+
+**Endpoint:** `POST /copy_chart_seatsio`
+
+**Request Body:**
+<ParamField body="chart_id" type="string" required>
+  The ID of the chart to copy
+</ParamField>
+
+```json
+{
+  "data": {
+    "chart_id": "chart-123"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Chart copiado en Seatsio",
+  "status": 200,
+  "data": {
+    "copy_chart": {
+      "id": "chart-456",
+      "name": "Copy of Main Venue",
+      "key": "copy-main-venue"
+    }
+  }
+}
+```
+
+### published_charts_seatsio
+
+Retrieves the published version thumbnail of a chart.
+
+**Endpoint:** `POST /published_charts_seatsio`
+
+**Request Body:**
+<ParamField body="chart_id" type="string" required>
+  The ID of the chart
+</ParamField>
+
+```json
+{
+  "data": {
+    "chart_id": "chart-123"
+  }
+}
+```
+
+## Tag Management
+
+### add_tags_to_chart_seatsio
+
+Adds one or more tags to a seating chart for categorization and filtering.
+
+**Endpoint:** `POST /add_tags_to_chart_seatsio`
+
+**Request Body:**
+<ParamField body="chart_id" type="string" required>
+  The ID of the chart to tag
+</ParamField>
+
+<ParamField body="tags" type="array" required>
+  Array of string tags to add to the chart
+</ParamField>
+
+```json
+{
+  "data": {
+    "chart_id": "chart-123",
+    "tags": ["concert", "outdoor", "premium"]
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Tags agregados al chart en Seatsio",
+  "status": 200,
+  "data": {
+    "tags": ["concert", "outdoor", "premium"]
+  }
+}
+```
+
+### remove_tags_from_chart_seatsio
+
+Removes specific tags from a seating chart.
+
+**Endpoint:** `POST /remove_tags_from_chart_seatsio`
+
+**Request Body:**
+<ParamField body="chart_id" type="string" required>
+  The ID of the chart
+</ParamField>
+
+<ParamField body="tags" type="array" required>
+  Array of string tags to remove from the chart
+</ParamField>
+
+```json
+{
+  "data": {
+    "chart_id": "chart-123",
+    "tags": ["outdoor"]
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Tags removidos del chart en Seatsio",
+  "status": 200,
+  "data": {
+    "tags": ["outdoor"]
+  }
+}
+```
+
+## Event Management
+
+### create_event_seatsio
+
+Creates a new event in Seats.io based on an existing seating chart.
+
+**Endpoint:** `POST /create_event_seatsio`
+
+**Request Body:**
+<ParamField body="chart_id" type="string" required>
+  The ID of the chart to use as the template
+</ParamField>
+
+<ParamField body="event_id" type="string" required>
+  Unique identifier for the event (used as the event key)
+</ParamField>
+
+<ParamField body="name_event" type="string" required>
+  Display name for the event
+</ParamField>
+
+<ParamField body="date_event" type="string" required>
+  Date of the event (format: YYYY-MM-DD)
+</ParamField>
+
+```json
+{
+  "data": {
+    "chart_id": "chart-123",
+    "event_id": "event-456",
+    "name_event": "Summer Concert 2024",
+    "date_event": "2024-07-15"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Evento Creado en Seatsio",
+  "status": 200,
+  "data": {
+    "event": {
+      "id": "event-456",
+      "key": "event-456",
+      "chartKey": "chart-123",
+      "name": "Summer Concert 2024",
+      "date": "2024-07-15",
+      "createdOn": "2024-03-13T10:30:00Z"
+    }
+  }
+}
+```
+
+### list_event_seatsio
+
+Retrieves all events from Seats.io.
+
+**Endpoint:** `POST /list_event_seatsio`
+
+**Request Body:**
+```json
+{
+  "data": {}
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Listado de Eventos en Seatsio",
+  "status": 200,
+  "data": {
+    "events": [
+      {
+        "id": "event-456",
+        "key": "event-456",
+        "name": "Summer Concert 2024",
+        "date": "2024-07-15",
+        "chartKey": "chart-123"
+      }
+    ]
+  }
+}
+```
+
+## Seat Holding and Booking Workflow
+
+<Steps>
+  <Step title="Hold Seats">
+    Use `hold_seats_seatsio` to temporarily reserve seats for a customer. A hold token is generated with a 10-minute expiration.
+  </Step>
+  <Step title="Process Payment">
+    Complete the payment transaction while seats are held.
+  </Step>
+  <Step title="Book Seats">
+    Use `book_seats_seatsio` with the hold token to confirm the reservation.
+  </Step>
+  <Step title="Release if Needed">
+    If payment fails or user cancels, use `release_seats_seatsio` or `expire_hold_token_seatsio` to free the seats.
+  </Step>
+</Steps>
+
+### hold_seats_seatsio
+
+Temporarily holds seats for a customer. Creates a hold token that expires in 10 minutes.
+
+**Endpoint:** `POST /hold_seats_seatsio`
+
+**Request Body:**
+<ParamField body="event_id" type="string" required>
+  The ID of the event
+</ParamField>
+
+<ParamField body="seats" type="array" required>
+  Array of seat identifiers to hold (e.g., ["A-1", "A-2"])
+</ParamField>
+
+```json
+{
+  "data": {
+    "event_id": "event-456",
+    "seats": ["A-1", "A-2", "B-5"]
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Asientos reservados correctamente",
+  "status": 200,
+  "data": {
+    "hold": {
+      "objects": [
+        {
+          "label": "A-1",
+          "status": "held"
+        },
+        {
+          "label": "A-2",
+          "status": "held"
+        }
+      ]
+    }
+  }
+}
+```
+
+<Warning>
+Hold tokens expire after 10 minutes. Seats will automatically be released if not booked within this time frame.
+</Warning>
+
+### book_seats_seatsio
+
+Confirms a seat reservation, converting held or free seats to booked status. Supports both regular seats and General Admission areas.
+
+**Endpoint:** `POST /book_seats_seatsio`
+
+**Request Body:**
+<ParamField body="event_id" type="string" required>
+  The ID of the event
+</ParamField>
+
+<ParamField body="seats" type="array" required>
+  Array of seat identifiers (strings) or General Admission objects with `objectId` and `quantity`
+</ParamField>
+
+<ParamField body="hold_token" type="object" required>
+  The hold token object obtained from `hold_seats_seatsio`
+  <ParamField body="token" type="string">
+    The token string
+  </ParamField>
+</ParamField>
+
+```json
+{
+  "data": {
+    "event_id": "event-456",
+    "seats": [
+      "A-1",
+      "A-2",
+      {"objectId": "GA-1", "quantity": 5}
+    ],
+    "hold_token": {
+      "token": "abc123xyz"
+    }
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Asientos confirmados correctamente",
+  "status": 200,
+  "data": {
+    "booked": {
+      "normalSeatsBooked": {
+        "objects": [
+          {"label": "A-1", "status": "booked"},
+          {"label": "A-2", "status": "booked"}
+        ]
+      },
+      "gaSeatsBooked": [
+        {
+          "objectId": "GA-1",
+          "quantity": 5,
+          "result": {"status": "booked"}
+        }
+      ]
+    },
+    "event_id": "event-456",
+    "hold_token": {"token": "abc123xyz"},
+    "summary": {
+      "normalSeats": 2,
+      "gaSeats": 1,
+      "total": 3
+    }
+  }
+}
+```
+
+<Note>
+The function automatically detects and handles both regular seats (strings) and General Admission areas (objects with `objectId` and `quantity`).
+</Note>
+
+### release_seats_seatsio
+
+Releases held or booked seats, making them available again.
+
+**Endpoint:** `POST /release_seats_seatsio`
+
+**Request Body:**
+<ParamField body="event_id" type="string" required>
+  The ID of the event
+</ParamField>
+
+<ParamField body="seats" type="array" required>
+  Array of seat identifiers to release
+</ParamField>
+
+<ParamField body="hold_token" type="object" optional>
+  Optional hold token to release specific held seats
+  <ParamField body="token" type="string">
+    The token string
+  </ParamField>
+</ParamField>
+
+```json
+{
+  "data": {
+    "event_id": "event-456",
+    "seats": ["A-1", "A-2"],
+    "hold_token": {
+      "token": "abc123xyz"
+    }
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Asientos liberados correctamente",
+  "status": 200,
+  "data": {
+    "release": {
+      "objects": [
+        {"label": "A-1", "status": "free"},
+        {"label": "A-2", "status": "free"}
+      ]
+    }
+  }
+}
+```
+
+### expire_hold_token_seatsio
+
+Immediately expires a hold token, releasing all associated seats.
+
+**Endpoint:** `POST /expire_hold_token_seatsio`
+
+**Request Body:**
+<ParamField body="hold_token" type="object" required>
+  The hold token to expire
+  <ParamField body="token" type="string">
+    The token string
+  </ParamField>
+</ParamField>
+
+```json
+{
+  "data": {
+    "hold_token": {
+      "token": "abc123xyz"
+    }
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Hold token expirado correctamente. Todos los asientos han sido liberados.",
+  "status": 200,
+  "data": {
+    "hold_token": {
+      "token": "abc123xyz"
+    },
+    "expired": true
+  }
+}
+```
+
+<Warning>
+Expiring a hold token immediately releases ALL seats associated with that token, regardless of which specific seats are specified.
+</Warning>
+
+## Error Handling
+
+All Seats.io functions return errors in the following format:
+
+```json
+{
+  "error": {
+    "message": "Error description",
+    "code": "ERROR_CODE",
+    "details": {}
+  }
+}
+```
+
+Common error scenarios:
+- **Invalid chart_id**: Chart not found in Seats.io
+- **Invalid event_id**: Event does not exist
+- **Seats already booked**: Attempting to hold/book unavailable seats
+- **Expired hold token**: Token has expired (10 minute limit)
+- **Invalid seat labels**: Seat identifiers don't exist in the chart
+
+## Best Practices
+
+1. **Always use hold tokens**: When booking seats, always hold them first to prevent race conditions.
+2. **Handle expiration**: Implement client-side timers to warn users before hold tokens expire.
+3. **Release on cancel**: Always release or expire hold tokens if the user cancels or navigates away.
+4. **Validate seat availability**: Check seat status before attempting to hold or book.
+5. **Tag your charts**: Use tags to organize venues by type, capacity, or event category.
+6. **General Admission**: For GA areas, always provide both `objectId` and `quantity` in the proper format.

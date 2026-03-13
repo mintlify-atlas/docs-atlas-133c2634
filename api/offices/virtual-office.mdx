@@ -1,0 +1,390 @@
+---
+title: "Virtual Office Operations"
+description: "Manage ticket operations for virtual offices and online sales channels"
+---
+
+## tickets_list_event_virtual
+
+<RequestExample>
+```bash cURL
+curl -X POST https://your-domain.com/tickets_list_event_virtual \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "event_id": "event_456"
+    }
+  }'
+```
+</RequestExample>
+
+Retrieves all tickets for a specific event in virtual office context. This endpoint provides the complete ticket inventory available for online sales.
+
+### Request Body
+
+<ParamField body="data" type="object" required>
+  Request data container
+  
+  <ParamField body="event_id" type="string" required>
+    Unique identifier for the event
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Human-readable status message
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success, 400 if not found)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data
+  
+  <ResponseField name="valido" type="boolean">
+    Whether the event was found
+  </ResponseField>
+  
+  <ResponseField name="response" type="array">
+    Complete array of ticket objects with all properties from the tickets table
+  </ResponseField>
+</ResponseField>
+
+---
+
+## tickets_lock_virtual
+
+<RequestExample>
+```bash cURL
+curl -X POST https://your-domain.com/tickets_lock_virtual \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "ticketd_reserved": ["event1-ticket1", "event1-ticket2"],
+      "reserved_time": 300
+    }
+  }'
+```
+</RequestExample>
+
+Temporarily locks tickets for virtual office transactions. This endpoint reserves tickets during the checkout process to prevent double-booking.
+
+<Note>
+Locked tickets are automatically released after the reserved_time expires. This prevents inventory from being permanently blocked by abandoned carts.
+</Note>
+
+### Request Body
+
+<ParamField body="data" type="object" required>
+  Request data container
+  
+  <ParamField body="ticketd_reserved" type="array" required>
+    Array of ticket IDs to lock (format: "event_id-ticket_id")
+  </ParamField>
+  
+  <ParamField body="reserved_time" type="number" required>
+    Lock duration in seconds (e.g., 300 = 5 minutes)
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success, 400 for validation errors)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data
+  
+  <ResponseField name="valido" type="boolean">
+    Whether the lock operation was successful
+  </ResponseField>
+  
+  <ResponseField name="tickets" type="array">
+    List of successfully locked ticket IDs (only on success)
+  </ResponseField>
+  
+  <ResponseField name="nodisponible" type="array">
+    List of unavailable ticket IDs that could not be locked (only on validation failure)
+  </ResponseField>
+</ResponseField>
+
+### Virtual vs Physical Office Differences
+
+<Note>
+**Virtual Office**: Tickets are temporarily locked with an expiration time. The lock is automatically released if payment is not completed.
+
+**Physical Office**: Tickets are assigned to a specific office without time limits. They remain offline until explicitly unassigned.
+</Note>
+
+### Ticket Locking Process
+
+<Steps>
+  <Step title="Availability Check">
+    Validates that all tickets have status=true (available)
+  </Step>
+  
+  <Step title="Block List Verification">
+    Checks that none of the tickets are already in the tickets_blocked table
+  </Step>
+  
+  <Step title="Lock Time Calculation">
+    Computes locked_up timestamp by adding reserved_time seconds to current time
+  </Step>
+  
+  <Step title="Block Record Creation">
+    Inserts records into tickets_blocked table with ticket_id, locked_up, and date_created
+  </Step>
+</Steps>
+
+### Response Examples
+
+<ResponseExample>
+```json Success
+{
+  "message": "Tickets blocked",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "tickets": ["event1-ticket1", "event1-ticket2"]
+  }
+}
+```
+</ResponseExample>
+
+<ResponseExample>
+```json Unavailable Tickets
+{
+  "message": "Tickets no disponibles",
+  "status": 400,
+  "data": {
+    "valido": false,
+    "nodisponible": ["event1-ticket3"]
+  }
+}
+```
+</ResponseExample>
+
+---
+
+## tickets_list_event_sales_virtual
+
+<RequestExample>
+```bash cURL
+curl -X POST https://your-domain.com/tickets_list_event_sales_virtual \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "event_id": "event_456"
+    }
+  }'
+```
+</RequestExample>
+
+Retrieves comprehensive ticket information for virtual sales, including blocking status and offline assignments. This endpoint provides real-time availability data for the sales interface.
+
+### Request Body
+
+<ParamField body="data" type="object" required>
+  Request data container
+  
+  <ParamField body="event_id" type="string" required>
+    Event identifier
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data
+  
+  <ResponseField name="valido" type="boolean">
+    Whether the event was found
+  </ResponseField>
+  
+  <ResponseField name="response" type="array">
+    Array of ticket objects with enhanced availability information
+    
+    <ResponseField name="id" type="string">
+      Internal ticket identifier
+    </ResponseField>
+    
+    <ResponseField name="ticket_id" type="string">
+      Composite ticket ID (event_id-ticket_id)
+    </ResponseField>
+    
+    <ResponseField name="event_id" type="string">
+      Event identifier
+    </ResponseField>
+    
+    <ResponseField name="event_name" type="string">
+      Event name
+    </ResponseField>
+    
+    <ResponseField name="event_description" type="string">
+      Event description
+    </ResponseField>
+    
+    <ResponseField name="zone" type="string">
+      Seating zone
+    </ResponseField>
+    
+    <ResponseField name="seat_row" type="string">
+      Seat row number
+    </ResponseField>
+    
+    <ResponseField name="seat_id" type="string">
+      Seat identifier
+    </ResponseField>
+    
+    <ResponseField name="color" type="string">
+      Zone color code
+    </ResponseField>
+    
+    <ResponseField name="status" type="boolean">
+      Computed availability (false if blocked, true if available)
+    </ResponseField>
+    
+    <ResponseField name="status_offline" type="boolean">
+      Whether ticket is assigned to a physical office
+    </ResponseField>
+    
+    <ResponseField name="status_real" type="boolean">
+      Actual ticket status from database
+    </ResponseField>
+    
+    <ResponseField name="ledger" type="array">
+      Transaction history for the ticket
+    </ResponseField>
+    
+    <ResponseField name="date_created" type="timestamp">
+      Ticket creation date
+    </ResponseField>
+    
+    <ResponseField name="date_updated" type="timestamp">
+      Last update timestamp
+    </ResponseField>
+    
+    <ResponseField name="date_start" type="timestamp">
+      Event start date
+    </ResponseField>
+    
+    <ResponseField name="date_end" type="timestamp">
+      Event end date
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+### Status Computation Logic
+
+The `status` field is computed using the following logic:
+```sql
+CASE 
+  WHEN status_d THEN false  -- Blocked in tickets_blocked table
+  WHEN status THEN true      -- Available
+  ELSE false                 -- Unavailable
+END
+```
+
+---
+
+## tickets_unlock_param_virtual
+
+<RequestExample>
+```bash cURL
+curl -X POST https://your-domain.com/tickets_unlock_param_virtual \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "ticketd_reserved": ["event1-ticket1", "event1-ticket2"]
+    }
+  }'
+```
+</RequestExample>
+
+Manually unlocks tickets in virtual office context. This endpoint removes tickets from the blocked list, making them available for purchase again.
+
+<Note>
+This endpoint is typically used when a transaction is cancelled or abandoned before completion. Locks also expire automatically based on the reserved_time set during locking.
+</Note>
+
+### Request Body
+
+<ParamField body="data" type="object" required>
+  Request data container
+  
+  <ParamField body="ticketd_reserved" type="array" required>
+    Array of ticket IDs to unlock
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data
+  
+  <ResponseField name="valido" type="boolean">
+    Always true on successful unlock
+  </ResponseField>
+</ResponseField>
+
+### When to Use Unlock
+
+- User cancels checkout process
+- Payment fails or is declined
+- Session timeout before payment completion
+- Manual intervention required by support team
+
+### Response Example
+
+<ResponseExample>
+```json Success
+{
+  "message": "Actualizado",
+  "status": 200,
+  "data": {
+    "valido": true
+  }
+}
+```
+</ResponseExample>
+
+---
+
+## Virtual vs Physical Office Comparison
+
+| Feature | Virtual Office | Physical Office |
+|---------|---------------|------------------|
+| **Ticket Locking** | Temporary with expiration timer | Permanent until unassigned |
+| **Lock Duration** | Configurable (e.g., 5 minutes) | Indefinite |
+| **Availability** | Real-time across all channels | Limited to assigned office |
+| **Synchronization** | Immediate | Requires manual sync |
+| **Use Case** | Online sales, mobile apps | Box office, in-person sales |
+| **Block Table** | tickets_blocked | tickets_offline |
+| **Auto-Release** | Yes (on timer expiry) | No (manual unassign required) |
+| **Ledger Action** | N/A (blocking only) | "offline" and "unassign" |
+
+<Note>
+Virtual offices use a temporary blocking mechanism optimized for high-concurrency online sales, while physical offices use a reservation system designed for offline inventory management.
+</Note>

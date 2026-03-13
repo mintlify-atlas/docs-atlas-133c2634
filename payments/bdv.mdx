@@ -1,0 +1,580 @@
+---
+title: "Banco de Venezuela"
+description: "Conciliación bancaria y pagos móviles con Banco de Venezuela"
+---
+
+## Descripción
+
+La integración con Banco de Venezuela (BDV) proporciona dos funcionalidades principales:
+
+- **Conciliación Bancaria**: Verificación automática de movimientos en cuenta
+- **Pago Móvil**: Validación de pagos móviles recibidos
+
+<Info>
+  Ubicación del código: `functions/banking/bancodevenezuela/`
+  - `conciliation_bdv.js` - Conciliación y pagos móviles
+  - `check_pagomovil.js` - Verificación adicional
+</Info>
+
+## Configuración
+
+### Variables de Entorno
+
+```javascript
+const cuentabdv = config.cuentabdv  // Número de cuenta BDV
+const apibdv = config.apibdv        // API Key de BDV
+```
+
+### Endpoint Base
+
+<CodeGroup>
+```javascript Producción
+const endpoint = 'https://bdvconciliacion.banvenez.com'
+```
+
+```javascript QA
+const endpoint = 'https://bdvconciliacionqa.banvenez.com:444'
+```
+</CodeGroup>
+
+## Conciliación Bancaria
+
+### Endpoint: `conciliation_bdv`
+
+Esta función consulta los movimientos bancarios de la cuenta BDV y los registra automáticamente en PostgreSQL para conciliación.
+
+**URL:** `https://bdvconciliacion.banvenez.com/apis/bdv/consulta/movimientos`
+
+<Steps>
+  <Step title="Consultar Movimientos">
+    Solicita movimientos del día actual
+  </Step>
+  <Step title="Validar en BD">
+    Verifica si el movimiento ya existe en `conc_conciliado_b`
+  </Step>
+  <Step title="Registrar Nuevos">
+    Inserta movimientos nuevos en tablas de conciliación
+  </Step>
+  <Step title="Clasificar Débitos">
+    Movimientos de débito se registran adicionalmente en `conc_conciliado_c`
+  </Step>
+</Steps>
+
+### Request
+
+```javascript
+const response = await fetch('YOUR_FUNCTION_URL/conciliation_bdv', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  }
+});
+```
+
+**Request Structure (conciliation_bdv.js:51-57):**
+```json
+{
+  "cuenta": "01020105530000767246",
+  "fechaIni": "13/03/2026",
+  "fechaFin": "13/03/2026",
+  "tipoMoneda": "VES",
+  "nroMovimiento": ""
+}
+```
+
+<Note>
+  Las fechas se generan automáticamente usando el día actual en formato DD/MM/YYYY
+</Note>
+
+### Response de BDV
+
+```json
+{
+  "data": {
+    "movs": [
+      {
+        "referencia": "123456789",
+        "fecha": "2026-03-13",
+        "importe": "150.50",
+        "mov": "CREDITO",
+        "descripcion": "Pago móvil recibido"
+      },
+      {
+        "referencia": "987654321",
+        "fecha": "2026-03-13",
+        "importe": "75.00",
+        "mov": "DEBITO",
+        "descripcion": "Transferencia saliente"
+      }
+    ]
+  }
+}
+```
+
+### Procesamiento de Movimientos
+
+**Código de Implementación (conciliation_bdv.js:76-108):**
+
+```javascript
+if (response.data.data) {
+  let movimientos = response.data.data.movs;
+  
+  await movimientos.forEach(async (mov, index) => {
+    let tipo_op = "";
+    let ref_mov = mov.referencia;
+    let fec_mov = mov.fecha;
+    let monto_mov = mov.importe;
+    
+    // Clasificar tipo de operación
+    if ("CREDITO" == mov.mov || "DEBITO" == mov.mov) {
+      if ("CREDITO" == mov.mov) tipo_op = "C";
+      if ("DEBITO" == mov.mov) tipo_op = "D";
+      
+      // Verificar si ya existe
+      const concilia_c = await dbpostgres.sqltmt(
+        "select", 
+        "conc_conciliado_b", 
+        "*", 
+        " no_cta = '" + cuentabdv + "' and no_docu = '" + ref_mov + "'"
+      );
+      
+      // Si no existe, agregar a valores
+      if (concilia_c.length <= 0) {
+        if (valores_cociliado_b != "") 
+          valores_cociliado_b = valores_cociliado_b + ", ";
+        
+        valores_cociliado_b = valores_cociliado_b + 
+          "('1', '" + cuentabdv + "','A','N" + tipo_op + "','" + 
+          ref_mov + "','" + moment(fec_mov).format() + "'," + 
+          monto_mov.replace(",", ".") + " ,'" + ref_mov + 
+          "', '" + ref_mov + "')";
+        
+        // Para débitos, registrar también en tabla C
+        if (tipo_op == "D") {
+          if (valores_cociliado_c != "") 
+            valores_cociliado_c = valores_cociliado_c + ", ";
+          
+          valores_cociliado_c = valores_cociliado_c + 
+            "('1', '" + cuentabdv + "','W','ND','" + ref_mov + 
+            "','" + moment(fec_mov).format() + "'," + 
+            monto_mov.replace(",", ".") + " ,'" + ref_mov + 
+            "', '" + ref_mov + "')";
+        }
+      }
+    }
+  });
+  
+  // Insertar en batch
+  if (valores_cociliado_b != "") {
+    await dbpostgres.sqltmt(
+      "insert", 
+      "conc_conciliado_b", 
+      campos_cociliado_b, 
+      null, null, null, null, 
+      valores_cociliado_b
+    );
+  }
+  
+  if (valores_cociliado_c != "") {
+    await dbpostgres.sqltmt(
+      "insert", 
+      "conc_conciliado_c", 
+      campos_cociliado_c, 
+      null, null, null, null, 
+      valores_cociliado_c
+    );
+  }
+}
+```
+
+### Estructura de Tablas
+
+**conc_conciliado_b**
+```sql
+CREATE TABLE conc_conciliado_b (
+  no_cia VARCHAR,       -- '1'
+  no_cta VARCHAR,       -- Número de cuenta
+  procedencia VARCHAR,  -- 'A'
+  tipo_doc VARCHAR,     -- 'NC' o 'ND' (Crédito/Débito)
+  no_docu VARCHAR,      -- Referencia del movimiento
+  fecha TIMESTAMP,      -- Fecha del movimiento
+  monto NUMERIC,        -- Monto del movimiento
+  no_fisico VARCHAR,    -- Número físico (= referencia)
+  serie_fisico VARCHAR  -- Serie física (= referencia)
+);
+```
+
+**conc_conciliado_c**
+```sql
+CREATE TABLE conc_conciliado_c (
+  no_cia VARCHAR,       -- '1'
+  no_cta VARCHAR,       -- Número de cuenta
+  procedencia VARCHAR,  -- 'W'
+  tipo_doc VARCHAR,     -- 'ND'
+  no_docu VARCHAR,      -- Referencia del movimiento
+  fecha TIMESTAMP,      -- Fecha del movimiento
+  monto NUMERIC,        -- Monto del movimiento
+  no_fisico VARCHAR,    -- Número físico
+  serie_fisico VARCHAR  -- Serie física
+);
+```
+
+<Info>
+  Los créditos se registran solo en `conc_conciliado_b`, mientras que los débitos se registran en ambas tablas
+</Info>
+
+### Response Final
+
+```json
+{
+  "message": "Conciliacion Banco de Venezuela",
+  "status": 200,
+  "data": {
+    "data": {
+      "movs": [
+        // Array de movimientos procesados
+      ]
+    }
+  }
+}
+```
+
+## Pago Móvil
+
+### Endpoint: `mobile_payment_bcv`
+
+Verifica la existencia y validez de un pago móvil específico.
+
+**URL:** `https://bdvconciliacion.banvenez.com/getMovement`
+
+### Request
+
+```javascript
+const response = await fetch('YOUR_FUNCTION_URL/mobile_payment_bcv', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    data: {
+      ced_pag: "V12345678",
+      tel_pag: "04241234567",
+      tel_dest: "04149876543",
+      referencia: "123456789",
+      fec_pag: "13/03/2026",
+      importe: "150.50",
+      cod_ban_origen: "0102"
+    }
+  })
+});
+```
+
+**Request Structure (conciliation_bdv.js:125-133):**
+```json
+{
+  "cedulaPagador": "V12345678",
+  "telefonoPagador": "04241234567",
+  "telefonoDestino": "04149876543",
+  "referencia": "123456789",
+  "fechaPago": "13/03/2026",
+  "importe": "150.50",
+  "bancoOrigen": "0102"
+}
+```
+
+### Parámetros
+
+| Parámetro | Descripción | Ejemplo |
+|-----------|-------------|----------|
+| `cedulaPagador` | Cédula del pagador | "V12345678" |
+| `telefonoPagador` | Teléfono del pagador | "04241234567" |
+| `telefonoDestino` | Teléfono destino | "04149876543" |
+| `referencia` | Referencia del pago | "123456789" |
+| `fechaPago` | Fecha en formato DD/MM/YYYY | "13/03/2026" |
+| `importe` | Monto del pago | "150.50" |
+| `bancoOrigen` | Código del banco origen | "0102" |
+
+### Response
+
+```json
+{
+  "message": "Conciliacion Pago movil BDV",
+  "status": 200,
+  "data": {
+    "resultado": {
+      "status": "success",
+      "transaction_id": "123456789",
+      "validated": true,
+      "details": {
+        "amount": "150.50",
+        "date": "13/03/2026",
+        "reference": "123456789"
+      }
+    }
+  }
+}
+```
+
+### Códigos de Banco
+
+Códigos bancarios venezolanos válidos:
+
+| Banco | Código |
+|-------|--------|
+| Banco de Venezuela | 0102 |
+| Mercantil | 0105 |
+| Banesco | 0134 |
+| Provincial | 0108 |
+| BBVA | 0104 |
+| BOD | 0116 |
+| Bicentenario | 0175 |
+| Tesoro | 0163 |
+
+## Headers Requeridos
+
+Todas las peticiones a BDV requieren:
+
+```javascript
+headers: {
+  'Content-Type': 'application/json',
+  'X-API-KEY': apibdv  // o 'x-api-key' (minúsculas)
+}
+```
+
+<Warning>
+  El header puede ser `X-API-KEY` o `x-api-key` dependiendo del ambiente (producción vs QA)
+</Warning>
+
+## Manejo de Errores
+
+### Errores Comunes
+
+<CodeGroup>
+```json Error de Autenticación
+{
+  "message": "Conciliacion Banco de Venezuela",
+  "status": 400,
+  "data": {
+    "status": "error Invalid API Key"
+  }
+}
+```
+
+```json Pago No Encontrado
+{
+  "message": "Conciliacion Pago movil BDV",
+  "status": 400,
+  "data": {
+    "error": {
+      "message": "Pago móvil no encontrado"
+    }
+  }
+}
+```
+
+```json Error de Servicio
+{
+  "message": "Conciliacion Banco de Venezuela",
+  "status": 400,
+  "data": {
+    "status": "error Servicio no disponible"
+  }
+}
+```
+</CodeGroup>
+
+### Implementación de Manejo de Errores
+
+```javascript
+axios.request(config)
+  .then(async (response) => {
+    console.log(JSON.stringify(response.data));
+    res.send({ 
+      message: "Conciliacion Banco de Venezuela", 
+      status: 200, 
+      data: response.data 
+    });
+  })
+  .catch((error) => {
+    console.log(error);
+    res.send({ 
+      message: "Conciliacion Banco de Venezuela", 
+      status: 400, 
+      data: { status: "error " + error } 
+    });
+  });
+```
+
+## Automatización
+
+### Scheduler Recomendado
+
+Para ejecutar la conciliación automáticamente:
+
+```javascript
+exports.scheduled_conciliation_bdv = functions.scheduler
+  .onSchedule('every 1 hours', async (context) => {
+    const axios = require('axios');
+    
+    try {
+      await axios.post(
+        'YOUR_FUNCTION_URL/conciliation_bdv',
+        {},
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      console.log('Conciliación BDV ejecutada exitosamente');
+    } catch (error) {
+      console.error('Error en conciliación BDV:', error);
+    }
+  });
+```
+
+<Tip>
+  Se recomienda ejecutar la conciliación cada 1-6 horas durante el horario bancario
+</Tip>
+
+## Formato de Fechas
+
+<Note>
+  BDV requiere fechas en formato **DD/MM/YYYY** a diferencia de otros proveedores que usan ISO 8601
+</Note>
+
+```javascript
+const moment = require('moment');
+
+// Para BDV
+let date_bdv = moment().format("DD/MM/YYYY");  // "13/03/2026"
+
+// Para almacenamiento en BD
+let date_db = moment(fec_mov).format();  // "2026-03-13T00:00:00-04:00"
+```
+
+## Moneda
+
+BDV solo procesa transacciones en **VES** (Bolívares Venezolanos).
+
+```json
+{
+  "tipoMoneda": "VES"
+}
+```
+
+## Integración con PostgreSQL
+
+El sistema utiliza un módulo personalizado para interactuar con PostgreSQL:
+
+```javascript
+const dbpostgres = require("../../../config/dbpostgres");
+
+// SELECT
+const result = await dbpostgres.sqltmt(
+  "select", 
+  "conc_conciliado_b",  // tabla
+  "*",                   // columnas
+  "no_cta = '01020105530000767246'"  // condición WHERE
+);
+
+// INSERT
+const insert = await dbpostgres.sqltmt(
+  "insert", 
+  "conc_conciliado_b",           // tabla
+  "no_cia,no_cta,procedencia",   // campos
+  null, null, null, null,
+  "('1', '0102...', 'A')"        // valores
+);
+```
+
+## Archivos de Referencia
+
+### conciliation_bdv.js
+
+- **Líneas 45-119**: Función `conciliation_bdv`
+- **Líneas 121-158**: Función `mobile_payment_bcv`
+- Ubicación: `functions/banking/bancodevenezuela/conciliation_bdv.js`
+
+### check_pagomovil.js
+
+Archivo alternativo para verificación de pagos móviles (ambiente QA).
+
+- **Líneas 43-80**: Función `mobile_payment_bcv`
+- **Líneas 82-116**: Función `conciliation_bcv`
+- Ubicación: `functions/banking/bancodevenezuela/check_pagomovil.js`
+
+## Ejemplo Completo
+
+```javascript
+// Ejecutar conciliación diaria
+const runDailyConciliation = async () => {
+  try {
+    // 1. Ejecutar conciliación BDV
+    const conciliation = await fetch(
+      'YOUR_FUNCTION_URL/conciliation_bdv',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+    
+    const result = await conciliation.json();
+    console.log('Movimientos procesados:', result.data.data.movs.length);
+    
+    // 2. Verificar pagos móviles específicos
+    const payments = [
+      { ref: '123456789', amount: '150.50' },
+      { ref: '987654321', amount: '75.00' }
+    ];
+    
+    for (const payment of payments) {
+      const verification = await fetch(
+        'YOUR_FUNCTION_URL/mobile_payment_bcv',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            data: {
+              ced_pag: "V12345678",
+              tel_pag: "04241234567",
+              tel_dest: "04149876543",
+              referencia: payment.ref,
+              fec_pag: moment().format('DD/MM/YYYY'),
+              importe: payment.amount,
+              cod_ban_origen: "0102"
+            }
+          })
+        }
+      );
+      
+      const verifyResult = await verification.json();
+      console.log(`Pago ${payment.ref}:`, verifyResult.data.resultado);
+    }
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error en conciliación:', error);
+    return { success: false, error };
+  }
+};
+```
+
+## Seguridad
+
+<Warning>
+  **Protección de Datos:**
+  - La API Key debe mantenerse en variables de entorno
+  - No exponer el número de cuenta en logs públicos
+  - Validar todos los inputs antes de enviar a BDV
+</Warning>
+
+### Buenas Prácticas
+
+```javascript
+// ✅ Correcto
+const apibdv = process.env.APIBDV || config.apibdv;
+
+// ❌ Incorrecto
+const apibdv = '96R7T1T5J2134T5YFC2GF15SDFG4BD1Z';
+```

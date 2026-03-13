@@ -1,0 +1,593 @@
+---
+title: 'Access Control'
+api: 'POST https://us-central1-tmt-system.cloudfunctions.net/tickets_access_control_in'
+description: 'Manage ticket and credential access control for event entry and exit'
+---
+
+## Ticket Entry Control
+
+Records ticket holder entry into the event venue.
+
+### Endpoint
+
+`POST https://us-central1-tmt-system.cloudfunctions.net/tickets_access_control_in`
+
+### Request Parameters
+
+<ParamField body="data" type="object" required>
+  Request data object
+  
+  <ParamField body="data.ticket_id" type="string" required>
+    The unique ticket identifier to grant entry
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message describing the entry result
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success, 400 for error)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data object
+  
+  <ResponseField name="data.valido" type="boolean">
+    Indicates whether entry was granted
+  </ResponseField>
+  
+  <ResponseField name="data.message" type="string">
+    Detailed entry status message
+  </ResponseField>
+</ResponseField>
+
+### Code Examples
+
+<CodeGroup>
+
+```javascript JavaScript
+const response = await fetch(
+  'https://us-central1-tmt-system.cloudfunctions.net/tickets_access_control_in',
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      data: {
+        ticket_id: 'event_123-ticket_abc'
+      }
+    })
+  }
+);
+
+const result = await response.json();
+console.log(result);
+```
+
+```bash cURL
+curl -X POST \
+  https://us-central1-tmt-system.cloudfunctions.net/tickets_access_control_in \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "data": {
+      "ticket_id": "event_123-ticket_abc"
+    }
+  }'
+```
+
+```python Python
+import requests
+
+url = "https://us-central1-tmt-system.cloudfunctions.net/tickets_access_control_in"
+payload = {
+    "data": {
+        "ticket_id": "event_123-ticket_abc"
+    }
+}
+
+response = requests.post(url, json=payload)
+print(response.json())
+```
+
+</CodeGroup>
+
+### Response Examples
+
+<Expandable title="First Entry">
+
+```json
+{
+  "message": "Ticket Ingresando",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "message": "Ticket Ingresando"
+  }
+}
+```
+
+</Expandable>
+
+<Expandable title="Re-Entry">
+
+```json
+{
+  "message": "Ticket ReIngreso",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "message": "Ticket ReIngreso"
+  }
+}
+```
+
+</Expandable>
+
+<Expandable title="Already Inside">
+
+```json
+{
+  "message": "Ticket ya Utilizado no puede volver Ingresar",
+  "status": 400,
+  "data": {
+    "valido": false,
+    "message": "Ticket ya Utilizado no puede volver Ingresar"
+  }
+}
+```
+
+</Expandable>
+
+<Expandable title="Invalid Ticket">
+
+```json
+{
+  "message": "Ticket no valido",
+  "status": 400,
+  "data": {
+    "valido": false,
+    "message": "Ticket no valido"
+  }
+}
+```
+
+</Expandable>
+
+---
+
+## Ticket Exit Control
+
+Records ticket holder exit from the event venue.
+
+### Endpoint
+
+`POST https://us-central1-tmt-system.cloudfunctions.net/tickets_access_control_out`
+
+### Request Parameters
+
+<ParamField body="data" type="object" required>
+  Request data object
+  
+  <ParamField body="data.ticket_id" type="string" required>
+    The unique ticket identifier to record exit
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message describing the exit result
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success, 400 for error)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data object
+  
+  <ResponseField name="data.valido" type="boolean">
+    Indicates whether exit was recorded
+  </ResponseField>
+  
+  <ResponseField name="data.message" type="string">
+    Detailed exit status message
+  </ResponseField>
+</ResponseField>
+
+### Code Examples
+
+<CodeGroup>
+
+```javascript JavaScript
+const response = await fetch(
+  'https://us-central1-tmt-system.cloudfunctions.net/tickets_access_control_out',
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      data: {
+        ticket_id: 'event_123-ticket_abc'
+      }
+    })
+  }
+);
+
+const result = await response.json();
+console.log(result);
+```
+
+```bash cURL
+curl -X POST \
+  https://us-central1-tmt-system.cloudfunctions.net/tickets_access_control_out \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "data": {
+      "ticket_id": "event_123-ticket_abc"
+    }
+  }'
+```
+
+```python Python
+import requests
+
+url = "https://us-central1-tmt-system.cloudfunctions.net/tickets_access_control_out"
+payload = {
+    "data": {
+        "ticket_id": "event_123-ticket_abc"
+    }
+}
+
+response = requests.post(url, json=payload)
+print(response.json())
+```
+
+</CodeGroup>
+
+### Response Examples
+
+<Expandable title="Exit Recorded">
+
+```json
+{
+  "message": "Ticket Salida",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "message": "Ticket Salida"
+  }
+}
+```
+
+</Expandable>
+
+<Expandable title="Never Entered">
+
+```json
+{
+  "message": "Ticket no Ingreso no puede salir",
+  "status": 400,
+  "data": {
+    "valido": false,
+    "message": "Ticket no Ingreso no puede salir"
+  }
+}
+```
+
+</Expandable>
+
+---
+
+## Credential Entry Control
+
+Records staff/credential holder entry into the event venue.
+
+### Endpoint
+
+`POST https://us-central1-tmt-system.cloudfunctions.net/credentials_access_control_in`
+
+### Request Parameters
+
+<ParamField body="data" type="object" required>
+  Request data object
+  
+  <ParamField body="data.event_id" type="string" required>
+    The unique event identifier
+  </ParamField>
+  
+  <ParamField body="data.credential_id" type="string" required>
+    The unique credential identifier
+  </ParamField>
+  
+  <ParamField body="data.holder_id" type="string" required>
+    The ID of the credential holder
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message describing the entry result
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success, 400 for error)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data object
+  
+  <ResponseField name="data.valido" type="boolean">
+    Indicates whether entry was granted
+  </ResponseField>
+  
+  <ResponseField name="data.message" type="string">
+    Detailed entry status message
+  </ResponseField>
+</ResponseField>
+
+### Code Examples
+
+<CodeGroup>
+
+```javascript JavaScript
+const response = await fetch(
+  'https://us-central1-tmt-system.cloudfunctions.net/credentials_access_control_in',
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      data: {
+        event_id: 'event_123',
+        credential_id: 'cred_abc',
+        holder_id: 'staff_xyz'
+      }
+    })
+  }
+);
+
+const result = await response.json();
+```
+
+```bash cURL
+curl -X POST \
+  https://us-central1-tmt-system.cloudfunctions.net/credentials_access_control_in \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "data": {
+      "event_id": "event_123",
+      "credential_id": "cred_abc",
+      "holder_id": "staff_xyz"
+    }
+  }'
+```
+
+```python Python
+import requests
+
+url = "https://us-central1-tmt-system.cloudfunctions.net/credentials_access_control_in"
+payload = {
+    "data": {
+        "event_id": "event_123",
+        "credential_id": "cred_abc",
+        "holder_id": "staff_xyz"
+    }
+}
+
+response = requests.post(url, json=payload)
+print(response.json())
+```
+
+</CodeGroup>
+
+### Response Examples
+
+<Expandable title="First Entry">
+
+```json
+{
+  "message": "Credencial valida Ingresando",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "message": "Credencial valida Ingresando"
+  }
+}
+```
+
+</Expandable>
+
+<Expandable title="Re-Entry">
+
+```json
+{
+  "message": "Credencial valida Re-Ingresando",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "message": "Credencial valida Re-Ingresando"
+  }
+}
+```
+
+</Expandable>
+
+---
+
+## Credential Exit Control
+
+Records staff/credential holder exit from the event venue.
+
+### Endpoint
+
+`POST https://us-central1-tmt-system.cloudfunctions.net/credentials_access_control_out`
+
+### Request Parameters
+
+<ParamField body="data" type="object" required>
+  Request data object
+  
+  <ParamField body="data.event_id" type="string" required>
+    The unique event identifier
+  </ParamField>
+  
+  <ParamField body="data.credential_id" type="string" required>
+    The unique credential identifier
+  </ParamField>
+  
+  <ParamField body="data.holder_id" type="string" required>
+    The ID of the credential holder
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message describing the exit result
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success, 400 for error)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data object
+  
+  <ResponseField name="data.valido" type="boolean">
+    Indicates whether exit was recorded
+  </ResponseField>
+  
+  <ResponseField name="data.message" type="string">
+    Detailed exit status message
+  </ResponseField>
+</ResponseField>
+
+### Code Examples
+
+<CodeGroup>
+
+```javascript JavaScript
+const response = await fetch(
+  'https://us-central1-tmt-system.cloudfunctions.net/credentials_access_control_out',
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      data: {
+        event_id: 'event_123',
+        credential_id: 'cred_abc',
+        holder_id: 'staff_xyz'
+      }
+    })
+  }
+);
+
+const result = await response.json();
+```
+
+```bash cURL
+curl -X POST \
+  https://us-central1-tmt-system.cloudfunctions.net/credentials_access_control_out \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "data": {
+      "event_id": "event_123",
+      "credential_id": "cred_abc",
+      "holder_id": "staff_xyz"
+    }
+  }'
+```
+
+```python Python
+import requests
+
+url = "https://us-central1-tmt-system.cloudfunctions.net/credentials_access_control_out"
+payload = {
+    "data": {
+        "event_id": "event_123",
+        "credential_id": "cred_abc",
+        "holder_id": "staff_xyz"
+    }
+}
+
+response = requests.post(url, json=payload)
+print(response.json())
+```
+
+</CodeGroup>
+
+### Response Examples
+
+<Expandable title="Exit Recorded">
+
+```json
+{
+  "message": "Credencial valida Saliendo",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "message": "Credencial valida Saliendo"
+  }
+}
+```
+
+</Expandable>
+
+<Expandable title="Never Entered">
+
+```json
+{
+  "message": "Credencial NO Entro",
+  "status": 200,
+  "data": {
+    "valido": false,
+    "message": "Credencial NO Entro"
+  }
+}
+```
+
+</Expandable>
+
+## Access Control Notes
+
+### Ticket Access Logic
+
+- Only sold tickets (`status: false`) can access the venue
+- `access_status`: Indicates if ticket has been used at least once
+- `access_entry`: Indicates if ticket holder is currently inside the venue
+- First entry sets both `access_status` and `access_entry` to `true`
+- Exit sets `access_entry` to `false`, keeping `access_status` as `true`
+- Re-entry is allowed if `access_status: true` and `access_entry: false`
+- Each action is logged in the ticket's ledger with timestamp
+
+### Credential Access Logic
+
+- Credentials are for staff, collaborators, and special access holders
+- Same entry/exit logic as tickets
+- Credentials are stored in `events/{event_id}/credentials` collection
+- Multiple re-entries are supported
+
+### Ledger Actions
+
+- `generated`: Ticket created
+- `accessed`: Entry granted
+- `came-out`: Exit recorded
+- `updated`: Ticket information modified
+
+### Best Practices
+
+- Validate ticket status before granting access
+- Log all access attempts for security auditing
+- Use QR code scanning for reliable ticket ID capture
+- Implement offline mode with sync via `tickets_access_control_cold` endpoint
+- Monitor real-time attendance using `access_entry: true` count

@@ -1,0 +1,493 @@
+---
+title: 'Pagos Mercantil'
+description: 'Endpoints para procesar pagos con Banco Mercantil: tarjetas de débito, crédito y pago móvil C2P'
+---
+
+## Descripción General
+
+Banco Mercantil ofrece tres métodos de pago integrados en el sistema TMT:
+
+1. **TDD (Tarjeta de Débito)** - Pagos con tarjetas de débito
+2. **TDC (Tarjeta de Crédito)** - Pagos con tarjetas de crédito
+3. **C2P (Customer to Person)** - Pagos móviles entre cuentas
+
+<Warning>
+Todos los endpoints requieren configuración del `merchantId` (200290) y `X-IBM-Client-ID` en las variables de entorno del sistema.
+</Warning>
+
+## Configuración de Merchant
+
+Todos los endpoints de pago utilizan la siguiente configuración:
+
+- **Integrator ID**: `31`
+- **Merchant ID**: Configurado en `config.merchantId`
+- **Terminal ID**: `"tmt"` (tarjetas) o `"abcde"` (C2P)
+- **Client ID**: Configurado en `config.clientidibm`
+- **Cifrado**: AES-256 para datos sensibles (CVV, código de autenticación)
+
+---
+
+## Tarjeta de Débito (TDD)
+
+<api>POST /api_mercantil_tdd_pay</api>
+
+Procesa pagos con tarjetas de débito de Banco Mercantil. Requiere autorización previa mediante el endpoint de autenticación.
+
+### Request
+
+#### Headers
+
+- `Content-Type`: `application/json`
+- `X-IBM-Client-ID`: Client ID configurado en el sistema
+
+#### Body Parameters
+
+<ParamField body="data" type="object" required>
+  Objeto que contiene los datos del pago con tarjeta de débito
+  
+  <ParamField body="amount" type="number" required>
+    Monto del pago en bolívares (VES). Ejemplo: `15`
+  </ParamField>
+  
+  <ParamField body="invoice_number" type="string" required>
+    Número de factura o referencia del pago. Ejemplo: `"987654"`
+  </ParamField>
+  
+  <ParamField body="customer_id" type="string" required>
+    Identificación del cliente (cédula). Ejemplo: `"V18366876"`
+  </ParamField>
+  
+  <ParamField body="card_number" type="string" required>
+    Número completo de la tarjeta de débito. Ejemplo: `"501878200066287386"`
+  </ParamField>
+  
+  <ParamField body="cvv" type="string" required>
+    Código de seguridad de la tarjeta (será encriptado). Ejemplo: `"752"`
+  </ParamField>
+  
+  <ParamField body="account_type" type="string" required>
+    Tipo de cuenta: `"cc"` (cuenta corriente) o `"ca"` (cuenta de ahorros)
+  </ParamField>
+  
+  <ParamField body="expiration_date" type="string" required>
+    Fecha de vencimiento en formato YYYY/MM. Ejemplo: `"2025/11"`
+  </ParamField>
+  
+  <ParamField body="twofactor_auth" type="string" required>
+    Código de autenticación de dos factores (será encriptado). Ejemplo: `"11111111"`
+  </ParamField>
+  
+  <ParamField body="ipaddress" type="string" required>
+    Dirección IP del cliente. Ejemplo: `"127.0.0.1"`
+  </ParamField>
+</ParamField>
+
+### Response
+
+#### Success Response (200)
+
+<ResponseField name="message" type="string">
+  Mensaje de confirmación: `"Procesado"`
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Datos de la transacción procesada
+  
+  <ResponseField name="transaction_id" type="string">
+    ID único de la transacción generado por el banco
+  </ResponseField>
+  
+  <ResponseField name="approval_code" type="string">
+    Código de aprobación del banco
+  </ResponseField>
+  
+  <ResponseField name="status" type="string">
+    Estado de la transacción: `"approved"` o `"declined"`
+  </ResponseField>
+  
+  <ResponseField name="amount" type="number">
+    Monto procesado
+  </ResponseField>
+  
+  <ResponseField name="currency" type="string">
+    Moneda de la transacción: `"ves"`
+  </ResponseField>
+  
+  <ResponseField name="timestamp" type="string">
+    Fecha y hora de la transacción
+  </ResponseField>
+</ResponseField>
+
+#### Error Response (400)
+
+<ResponseField name="message" type="string">
+  Mensaje de error: `"Error"`
+</ResponseField>
+
+<ResponseField name="error" type="object">
+  Detalles del error devueltos por la API de Mercantil
+  
+  <ResponseField name="code" type="string">
+    Código de error del banco
+  </ResponseField>
+  
+  <ResponseField name="message" type="string">
+    Descripción del error
+  </ResponseField>
+</ResponseField>
+
+### Ejemplo de Uso
+
+<CodeGroup>
+
+```javascript Request
+const axios = require('axios');
+
+const paymentData = {
+  data: {
+    amount: 150.50,
+    invoice_number: "INV-2025-001",
+    customer_id: "V18366876",
+    card_number: "501878200066287386",
+    cvv: "752",
+    account_type: "cc",
+    expiration_date: "2025/11",
+    twofactor_auth: "12345678",
+    ipaddress: "192.168.1.100"
+  }
+};
+
+const response = await axios.post(
+  'https://your-domain.com/api_mercantil_tdd_pay',
+  paymentData
+);
+
+console.log(response.data);
+```
+
+```json Response (Success)
+{
+  "message": "Procesado",
+  "data": {
+    "transaction_id": "TXN123456789",
+    "approval_code": "ABC123",
+    "status": "approved",
+    "amount": 150.50,
+    "currency": "ves",
+    "timestamp": "2025-03-13T10:30:00Z"
+  }
+}
+```
+
+```json Response (Error)
+{
+  "message": "Error",
+  "error": {
+    "code": "INSUFFICIENT_FUNDS",
+    "message": "Fondos insuficientes en la cuenta"
+  }
+}
+```
+
+</CodeGroup>
+
+---
+
+## Tarjeta de Crédito (TDC)
+
+<api>POST /api_mercantil_tdc_pay</api>
+
+Procesa pagos con tarjetas de crédito de Banco Mercantil.
+
+### Request
+
+#### Headers
+
+- `Content-Type`: `application/json`
+- `X-IBM-Client-Id`: Client ID configurado en el sistema
+
+#### Body Parameters
+
+<ParamField body="data" type="object" required>
+  Objeto que contiene los datos del pago con tarjeta de crédito
+  
+  <ParamField body="amount" type="number" required>
+    Monto del pago en bolívares (VES). Ejemplo: `15`
+  </ParamField>
+  
+  <ParamField body="invoice_number" type="string" required>
+    Número de factura o referencia del pago. Ejemplo: `"987654"`
+  </ParamField>
+  
+  <ParamField body="customer_id" type="string" required>
+    Identificación del cliente (cédula). Ejemplo: `"V18366876"`
+  </ParamField>
+  
+  <ParamField body="card_number" type="string" required>
+    Número completo de la tarjeta de crédito. Ejemplo: `"501878200066287386"`
+  </ParamField>
+  
+  <ParamField body="cvv" type="string" required>
+    Código de seguridad de la tarjeta (será encriptado). Ejemplo: `"752"`
+  </ParamField>
+  
+  <ParamField body="expiration_date" type="string" required>
+    Fecha de vencimiento en formato YYYY/MM. Ejemplo: `"2025/11"`
+  </ParamField>
+  
+  <ParamField body="ipaddress" type="string" required>
+    Dirección IP del cliente. Ejemplo: `"127.0.0.1"`
+  </ParamField>
+</ParamField>
+
+### Response
+
+La estructura de respuesta es idéntica a la de TDD.
+
+### Ejemplo de Uso
+
+<CodeGroup>
+
+```javascript Request
+const paymentData = {
+  data: {
+    amount: 250.00,
+    invoice_number: "INV-2025-002",
+    customer_id: "V18366876",
+    card_number: "501878200066287386",
+    cvv: "752",
+    expiration_date: "2026/08",
+    ipaddress: "192.168.1.100"
+  }
+};
+
+const response = await axios.post(
+  'https://your-domain.com/api_mercantil_tdc_pay',
+  paymentData
+);
+```
+
+```json Response
+{
+  "message": "Procesado",
+  "data": {
+    "transaction_id": "TXN987654321",
+    "approval_code": "XYZ789",
+    "status": "approved",
+    "amount": 250.00,
+    "currency": "ves",
+    "timestamp": "2025-03-13T11:45:00Z"
+  }
+}
+```
+
+</CodeGroup>
+
+---
+
+## C2P - Pago Móvil
+
+<api>POST /api_mercantil_c2p_pay</api>
+
+Procesa pagos mediante transferencias móviles C2P (Customer to Person) de Banco Mercantil.
+
+### Request
+
+#### Headers
+
+- `Content-Type`: `application/json`
+- `X-IBM-Client-ID`: Client ID configurado en el sistema
+
+#### Body Parameters
+
+<ParamField body="data" type="object" required>
+  Objeto que contiene los datos del pago móvil C2P
+  
+  <ParamField body="amount" type="number" required>
+    Monto del pago en bolívares (VES)
+  </ParamField>
+  
+  <ParamField body="invoice_number" type="string" required>
+    Número de factura o referencia del pago
+  </ParamField>
+  
+  <ParamField body="destination_bank_id" type="string" required>
+    Código del banco destino. Ejemplo: `"0102"` (Banco de Venezuela)
+  </ParamField>
+  
+  <ParamField body="destination_id" type="string" required>
+    Cédula del destinatario (será encriptada). Ejemplo: `"V18367443"`
+  </ParamField>
+  
+  <ParamField body="destination_mobile_number" type="string" required>
+    Número de teléfono del destinatario (será encriptado). Ejemplo: `"584241513063"`
+  </ParamField>
+  
+  <ParamField body="origin_mobile_number" type="string" required>
+    Número de teléfono del originante (será encriptado). Ejemplo: `"584126935529"`
+  </ParamField>
+  
+  <ParamField body="payment_reference" type="string" required>
+    Referencia del pago. Ejemplo: `"987"`
+  </ParamField>
+  
+  <ParamField body="twofactor_auth" type="string" required>
+    Código de autenticación de dos factores (será encriptado). Ejemplo: `"00001111"`
+  </ParamField>
+  
+  <ParamField body="ipaddress" type="string" required>
+    Dirección IP del cliente. Ejemplo: `"127.0.0.1"`
+  </ParamField>
+</ParamField>
+
+### Response
+
+#### Success Response (200)
+
+<ResponseField name="message" type="string">
+  Mensaje de confirmación: `"Procesado"`
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Datos de la transacción C2P procesada
+  
+  <ResponseField name="transaction_id" type="string">
+    ID único de la transacción
+  </ResponseField>
+  
+  <ResponseField name="approval_code" type="string">
+    Código de aprobación
+  </ResponseField>
+  
+  <ResponseField name="status" type="string">
+    Estado de la transacción
+  </ResponseField>
+  
+  <ResponseField name="destination_info" type="object">
+    Información del destinatario confirmada
+    
+    <ResponseField name="bank_name" type="string">
+      Nombre del banco destino
+    </ResponseField>
+    
+    <ResponseField name="account_holder" type="string">
+      Nombre del titular de la cuenta destino
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+#### Error Response (400)
+
+<ResponseField name="message" type="string">
+  Mensaje de error: `"Error"`
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Detalles del error
+</ResponseField>
+
+### Ejemplo de Uso
+
+<CodeGroup>
+
+```javascript Request
+const c2pPayment = {
+  data: {
+    amount: 500.00,
+    invoice_number: "INV-2025-003",
+    destination_bank_id: "0102",
+    destination_id: "V18367443",
+    destination_mobile_number: "584241513063",
+    origin_mobile_number: "584126935529",
+    payment_reference: "REF-001",
+    twofactor_auth: "12345678",
+    ipaddress: "192.168.1.100"
+  }
+};
+
+const response = await axios.post(
+  'https://your-domain.com/api_mercantil_c2p_pay',
+  c2pPayment
+);
+```
+
+```json Response
+{
+  "message": "Procesado",
+  "data": {
+    "transaction_id": "C2P123456789",
+    "approval_code": "APP-789",
+    "status": "approved",
+    "destination_info": {
+      "bank_name": "Banco de Venezuela",
+      "account_holder": "Juan Pérez"
+    }
+  }
+}
+```
+
+</CodeGroup>
+
+---
+
+## Flujo de Pago General
+
+<Steps>
+  <Step title="Recopilar datos del cliente">
+    Obtener todos los datos necesarios según el método de pago: tarjeta o pago móvil.
+  </Step>
+  
+  <Step title="Solicitar autorización (solo TDD)">
+    Para pagos con tarjeta de débito, primero solicitar autorización mediante `/api_mercantil_auth`.
+  </Step>
+  
+  <Step title="Encriptar datos sensibles">
+    El sistema encripta automáticamente los datos sensibles (CVV, códigos de autenticación, números de teléfono) usando AES-256.
+  </Step>
+  
+  <Step title="Enviar solicitud de pago">
+    Enviar la solicitud al endpoint correspondiente con todos los datos requeridos.
+  </Step>
+  
+  <Step title="Procesar respuesta del banco">
+    El banco valida la transacción y retorna el resultado (aprobado o rechazado).
+  </Step>
+  
+  <Step title="Registrar transacción">
+    Guardar el resultado de la transacción en el sistema para auditoría y conciliación.
+  </Step>
+</Steps>
+
+## Códigos de Banco (para C2P)
+
+| Código | Banco |
+|--------|-------|
+| 0102   | Banco de Venezuela |
+| 0105   | Banco Mercantil |
+| 0108   | Banco Provincial (BBVA) |
+| 0114   | Bancaribe |
+| 0115   | Banco Exterior |
+| 0134   | Banesco |
+| 0151   | BFC Banco Fondo Común |
+| 0163   | Banco del Tesoro |
+| 0166   | Banco Agrícola de Venezuela |
+| 0172   | Bancamiga |
+| 0175   | Banco Bicentenario |
+| 0191   | Banco Nacional de Crédito (BNC) |
+
+## Seguridad
+
+<Warning>
+  **Datos Encriptados**
+  
+  Los siguientes datos se encriptan automáticamente usando AES-256 antes de enviarlos al banco:
+  - CVV de tarjetas
+  - Códigos de autenticación de dos factores
+  - Números de teléfono (C2P)
+  - Cédulas de identidad (C2P)
+</Warning>
+
+## Endpoints Relacionados
+
+- [Autenticación Mercantil](/api/payments/mercantil-auth) - Autorización previa para TDD
+- [Búsqueda de Pagos C2P](/api/payments/mercantil-pay#buscar-pago-c2p) - Consultar estado de pagos móviles

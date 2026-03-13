@@ -1,80 +1,323 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: 'Guía de Inicio Rápido'
+description: 'Comienza a usar la API de TMT en minutos'
 ---
 
-## Get started in three steps
+## Introducción
 
-Get your documentation site running locally and make your first customization.
-
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+Esta guía te ayudará a realizar tu primera llamada a la API de TMT, un sistema de gestión de tickets basado en Firebase Cloud Functions.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  La API de TMT utiliza Firebase Authentication para la autenticación de usuarios y Firebase Cloud Functions para el procesamiento de solicitudes.
 </Note>
+
+## Prerequisitos
+
+Antes de comenzar, asegúrate de tener:
+
+- Node.js 22 o superior instalado
+- Credenciales de Firebase para tu proyecto
+- Un cliente HTTP como cURL, Postman, o Axios
+
+## Configuración Inicial
+
+<Steps>
+  <Step title="Instala las dependencias necesarias">
+    Si estás integrando TMT en tu aplicación, instala los paquetes de Firebase:
+
+    <CodeGroup>
+      ```bash npm
+      npm install firebase firebase-admin cors
+      ```
+
+      ```bash yarn
+      yarn add firebase firebase-admin cors
+      ```
+
+      ```bash pnpm
+      pnpm add firebase firebase-admin cors
+      ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Configura Firebase en tu proyecto">
+    Inicializa Firebase con tus credenciales:
+
+    ```javascript
+    const { initializeApp } = require('firebase/app');
+    const { getAuth } = require('firebase/auth');
+
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_AUTH_DOMAIN",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_STORAGE_BUCKET",
+      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    ```
+  </Step>
+
+  <Step title="Autentica al usuario">
+    Obtén un token de autenticación de Firebase:
+
+    ```javascript
+    const { signInWithEmailAndPassword } = require('firebase/auth');
+
+    async function authenticate(email, password) {
+      try {
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const idToken = await userCredential.user.getIdToken();
+        return idToken;
+      } catch (error) {
+        console.error('Error de autenticación:', error);
+        throw error;
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Realiza tu primera llamada a la API">
+    Ahora puedes llamar a las Cloud Functions de TMT:
+
+    ```javascript
+    const axios = require('axios');
+
+    async function callTMTAPI(endpoint, data, idToken) {
+      const response = await axios.post(
+        `https://<region>-<project-id>.cloudfunctions.net/${endpoint}`,
+        { data },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          }
+        }
+      );
+      return response.data;
+    }
+    ```
+  </Step>
+</Steps>
+
+## Ejemplo Completo: Crear un Cliente
+
+Aquí está un ejemplo completo de cómo crear un nuevo cliente en el sistema TMT usando la función `create_client`:
+
+### Estructura de la Solicitud
+
+Basado en el código fuente en `functions/users/create_client.js:11-75`, la función espera los siguientes datos:
+
+```javascript
+const clientData = {
+  data: {
+    name: "Empresa Ejemplo C.A.",
+    email: "contacto@empresaejemplo.com",
+    password: "SecurePassword123!",
+    name_commercial: "Empresa Ejemplo",
+    phone: "+58-412-1234567",
+    status: true,
+    id: "J-12345678-9",
+    id_type: "RIF",
+    city: "Caracas",
+    country: "Venezuela",
+    line: "Av. Principal, Centro Comercial, Piso 3",
+    zip_code: "1050",
+    account_type: "corporate",
+    commercial_registry: "12345",
+    last_assembly_minutes: "2024-01-15",
+    fiscal_info: {
+      tax_id: "J-12345678-9",
+      tax_name: "Empresa Ejemplo C.A."
+    },
+    commercial_license: "LC-2024-001",
+    taxpayer_type: "ordinario",
+    legal_representative: {
+      name: "Juan Pérez",
+      id: "V-12345678",
+      position: "Gerente General"
+    },
+    contact_person: {
+      name: "María González",
+      phone: "+58-412-7654321",
+      email: "maria@empresaejemplo.com"
+    },
+    bank_accounts: [
+      {
+        bank: "Banco de Venezuela",
+        account_number: "0102-1234-56-7890123456",
+        account_type: "corriente"
+      }
+    ]
+  }
+};
+```
+
+### Llamada a la API
+
+<CodeGroup>
+  ```javascript Node.js
+  const axios = require('axios');
+
+  async function createClient() {
+    const endpoint = 'create_client';
+    const baseURL = 'https://<region>-<project-id>.cloudfunctions.net';
+    
+    try {
+      const response = await axios.post(
+        `${baseURL}/${endpoint}`,
+        clientData,
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      console.log('Cliente creado exitosamente:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error al crear cliente:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  createClient();
+  ```
+
+  ```bash cURL
+  curl -X POST \
+    https://<region>-<project-id>.cloudfunctions.net/create_client \
+    -H 'Content-Type: application/json' \
+    -d '{
+      "data": {
+        "name": "Empresa Ejemplo C.A.",
+        "email": "contacto@empresaejemplo.com",
+        "password": "SecurePassword123!",
+        "name_commercial": "Empresa Ejemplo",
+        "phone": "+58-412-1234567",
+        "status": true,
+        "id": "J-12345678-9",
+        "id_type": "RIF",
+        "city": "Caracas",
+        "country": "Venezuela",
+        "line": "Av. Principal, Centro Comercial, Piso 3",
+        "zip_code": "1050",
+        "account_type": "corporate"
+      }
+    }'
+  ```
+
+  ```python Python
+  import requests
+  import json
+
+  def create_client():
+      endpoint = 'create_client'
+      base_url = 'https://<region>-<project-id>.cloudfunctions.net'
+      
+      client_data = {
+          "data": {
+              "name": "Empresa Ejemplo C.A.",
+              "email": "contacto@empresaejemplo.com",
+              "password": "SecurePassword123!",
+              "name_commercial": "Empresa Ejemplo",
+              "phone": "+58-412-1234567",
+              "status": True,
+              "id": "J-12345678-9",
+              "id_type": "RIF",
+              "city": "Caracas",
+              "country": "Venezuela",
+              "line": "Av. Principal, Centro Comercial, Piso 3",
+              "zip_code": "1050",
+              "account_type": "corporate"
+          }
+      }
+      
+      try:
+          response = requests.post(
+              f"{base_url}/{endpoint}",
+              json=client_data,
+              headers={"Content-Type": "application/json"}
+          )
+          response.raise_for_status()
+          print("Cliente creado exitosamente:", response.json())
+          return response.json()
+      except requests.exceptions.RequestException as e:
+          print(f"Error al crear cliente: {e}")
+          raise
+
+  create_client()
+  ```
+</CodeGroup>
+
+### Respuesta Exitosa
+
+Cuando el cliente se crea exitosamente, recibirás una respuesta como esta:
+
+```json
+{
+  "message": "Ingresado con el ID: abc123xyz456def789.",
+  "status": 200,
+  "data": {
+    "uid": "abc123xyz456def789"
+  }
+}
+```
+
+<Info>
+  El `uid` devuelto es el identificador único del usuario en Firebase Authentication y se utiliza como clave del documento en la colección `u_clients` de Firestore.
+</Info>
+
+### Respuesta de Error
+
+Si hay un error al crear el cliente, recibirás:
+
+```json
+{
+  "message": "Error creando nuevo usuario:",
+  "status": 400,
+  "data": {
+    "error": {
+      "code": "auth/email-already-exists",
+      "message": "The email address is already in use by another account."
+    }
+  }
+}
+```
+
+## Datos Almacenados
+
+Según el código en `functions/users/create_client.js:16-49`, cuando creas un cliente, se almacenan los siguientes datos en Firestore:
+
+- **Información básica**: nombre, email, teléfono, estado
+- **Dirección**: ciudad, país, línea de dirección, código postal
+- **Información fiscal**: tipo de cuenta, registro comercial, licencia comercial, tipo de contribuyente
+- **Representante legal y persona de contacto**
+- **Cuentas bancarias**
+- **Timestamps**: fecha de creación, última actualización, último acceso
+- **Contadores**: colaboradores, contratos, eventos (inicializados en 0)
+
+## Próximos Pasos
+
+<CardGroup cols={2}>
+  <Card title="Arquitectura del Sistema" icon="diagram-project" href="/architecture">
+    Comprende cómo funciona TMT internamente
+  </Card>
+  <Card title="Gestión de Usuarios" icon="users" href="/auth/users">
+    Aprende sobre los diferentes tipos de usuarios
+  </Card>
+  <Card title="Gestión de Eventos" icon="calendar" href="/modules/events">
+    Crea y gestiona eventos de ticketing
+  </Card>
+  <Card title="Procesamiento de Órdenes" icon="shopping-cart" href="/modules/orders">
+    Maneja órdenes y transacciones
+  </Card>
+</CardGroup>
+
+<Warning>
+  Recuerda reemplazar `<region>` y `<project-id>` con los valores reales de tu proyecto Firebase.
+</Warning>

@@ -1,0 +1,567 @@
+---
+title: "Mercantil Banco"
+description: "Integración con Mercantil Banco para pagos con TDD, TDC y C2P"
+---
+
+## Descripción
+
+Mercantil Banco es el principal proveedor de pagos locales, soportando tres métodos:
+
+- **TDD (Tarjeta de Débito)**: Pagos con tarjetas de débito
+- **TDC (Tarjeta de Crédito)**: Pagos con tarjetas de crédito
+- **C2P (Cliente a Punto)**: Pagos móviles persona a comercio
+
+<Info>
+  Ubicación del código: `functions/banking/mercantil/api_mercantil.js`
+</Info>
+
+## Configuración
+
+### Variables de Entorno
+
+```javascript
+const merchantId = config.merchantId           // ID del comercio
+const client_id = config.clientidibm           // Client ID de IBM
+const clientidibmpm = config.clientidibmpm     // Client ID para pagos móviles
+const cifr = config.cifr                       // Clave de encriptación
+const cifr_ted = config.cifr_ted              // Clave para TED
+const merchantId_ted = config.merchantId_ted   // ID para TED
+```
+
+### Endpoints
+
+<CodeGroup>
+```javascript Producción
+const endpoint_payment = 'https://apimbu.mercantilbanco.com/mercantil-banco/prod/v1/payment/pay'
+const endpoint_ted = 'https://apimbu.mercantilbanco.com/mercantil-banco/prod/v2/ted/'
+```
+
+```javascript Sandbox
+const endpoint_payment = 'https://apimbu.mercantilbanco.com/mercantil-banco/sandbox/v1/payment/pay'
+const endpoint_ted = 'https://apimbu.mercantilbanco.com/mercantil-banco/sandbox/v2/ted/'
+```
+</CodeGroup>
+
+## Métodos de Pago
+
+### 1. Tarjeta de Débito (TDD)
+
+#### Endpoint: `api_mercantil_tdd_pay`
+
+<Steps>
+  <Step title="Solicitar Autorización">
+    Primero se debe obtener autorización usando `api_mercantil_auth`
+  </Step>
+  <Step title="Procesar Pago">
+    Usar el código de autorización de dos factores para completar el pago
+  </Step>
+</Steps>
+
+#### Solicitar Autorización
+
+**Function:** `api_mercantil_auth`
+
+```javascript
+const response = await fetch('YOUR_FUNCTION_URL/api_mercantil_auth', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    data: {
+      customer_id: "V12345678",
+      card_number: "501878200066287386",
+      ipaddress: "127.0.0.1"
+    }
+  })
+});
+```
+
+**Request Structure:**
+```json
+{
+  "merchant_identify": {
+    "integratorId": 31,
+    "merchantId": "<merchantId>",
+    "terminalId": "tmt"
+  },
+  "client_identify": {
+    "ipaddress": "127.0.0.1"
+  },
+  "transaction_authInfo": {
+    "trx_type": "solaut",
+    "payment_method": "tdd",
+    "customer_id": "V12345678",
+    "card_number": "501878200066287386"
+  }
+}
+```
+
+#### Procesar Pago TDD
+
+```javascript
+const response = await fetch('YOUR_FUNCTION_URL/api_mercantil_tdd_pay', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    data: {
+      amount: 15.00,
+      invoice_number: "987654",
+      customer_id: "V12345678",
+      card_number: "501878200066287386",
+      cvv: "752",
+      account_type: "cc",
+      expiration_date: "2025/11",
+      twofactor_auth: "11111111",
+      ipaddress: "127.0.0.1"
+    }
+  })
+});
+```
+
+<Warning>
+  El CVV y el código 2FA son automáticamente encriptados con AES-256 antes de enviarse al banco
+</Warning>
+
+**Código de Implementación:**
+
+```javascript
+// Encriptar datos sensibles
+const cvv_encr = encryption.encryptAES256(cvv, cifr)
+const twofactor_auth_encr = encryption.encryptAES256(twofactor_auth, cifr)
+
+let data = JSON.stringify({
+  "merchant_identify": {
+    "integratorId": 1,
+    "merchantId": merchantId,
+    "terminalId": "1"
+  },
+  "client_identify": {
+    "ipaddress": "127.0.0.1"
+  },
+  "transaction": {
+    "trx_type": "compra",
+    "payment_method": "tdd",
+    "customer_id": customer_id,
+    "card_number": card_number,
+    "expiration_date": expiration_date,
+    "cvv": cvv_encr,
+    "twofactor_auth": twofactor_auth_encr,
+    "account_type": account_type,
+    "invoice_number": invoice_number,
+    "currency": "ves",
+    "amount": amount
+  }
+});
+```
+
+**Response:**
+```json
+{
+  "message": "Procesado",
+  "data": {
+    "transaction_id": "123456",
+    "status": "approved",
+    "authorization_code": "ABC123"
+  }
+}
+```
+
+### 2. Tarjeta de Crédito (TDC)
+
+#### Endpoint: `api_mercantil_tdc_pay`
+
+<Note>
+  Los pagos con TDC no requieren autenticación de dos factores
+</Note>
+
+```javascript
+const response = await fetch('YOUR_FUNCTION_URL/api_mercantil_tdc_pay', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    data: {
+      amount: 25.00,
+      invoice_number: "987655",
+      customer_id: "V12345678",
+      card_number: "4111111111111111",
+      cvv: "123",
+      expiration_date: "2025/12",
+      ipaddress: "127.0.0.1"
+    }
+  })
+});
+```
+
+**Request Structure (api_mercantil.js:379-403):**
+```javascript
+let data = JSON.stringify({
+  "merchant_identify": {
+    "integratorId": 31,
+    "merchantId": merchantId,
+    "terminalId": "tmt"
+  },
+  "client_identify": {
+    "ipaddress": "127.0.0.1"
+  },
+  "transaction": {
+    "trx_type": "compra",
+    "payment_method": "tdc",
+    "customer_id": customer_id,
+    "card_number": card_number,
+    "expiration_date": expiration_date,
+    "cvv": cvv_encr,  // Encriptado con AES-256
+    "invoice_number": invoice_number,
+    "currency": "ves",
+    "amount": amount
+  }
+});
+```
+
+### 3. Cliente a Punto (C2P)
+
+Pagos móviles desde cualquier banco venezolano hacia una cuenta Mercantil.
+
+#### Endpoint: `api_mercantil_c2p_pay`
+
+<Steps>
+  <Step title="Solicitar Código SCP">
+    El cliente debe solicitar un código de autorización usando `api_mercantil_c2p_auth`
+  </Step>
+  <Step title="Procesar Pago C2P">
+    Completar el pago con el código 2FA
+  </Step>
+  <Step title="Verificar Transacción">
+    Opcionalmente buscar la transacción con `api_mercantil_c2p_search`
+  </Step>
+</Steps>
+
+#### Solicitar Código SCP
+
+**Function:** `api_mercantil_c2p_auth`
+
+```javascript
+const response = await fetch('YOUR_FUNCTION_URL/api_mercantil_c2p_auth', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    data: {
+      destination_id: "V18367443",
+      destination_mobile_number: "584241513063",
+      ipaddress: "127.0.0.1"
+    }
+  })
+});
+```
+
+<Info>
+  La cédula y el teléfono de destino son encriptados automáticamente por la función
+</Info>
+
+#### Procesar Pago C2P
+
+```javascript
+const response = await fetch('YOUR_FUNCTION_URL/api_mercantil_c2p_pay', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    data: {
+      amount: 50.00,
+      invoice_number: "INV-001",
+      destination_bank_id: "0102",  // Código del banco
+      destination_id: "V18367443",
+      destination_mobile_number: "584241513063",
+      origin_mobile_number: "584126935529",
+      payment_reference: "987",
+      twofactor_auth: "00001111",
+      ipaddress: "127.0.0.1"
+    }
+  })
+});
+```
+
+**Request Structure (api_mercantil.js:457-493):**
+```javascript
+let data = JSON.stringify({
+  "merchant_identify": {
+    "integratorId": 1,
+    "merchantId": merchantId,
+    "terminalId": "abcde"
+  },
+  "client_identify": {
+    "ipaddress": "127.0.0.1",
+    "browser_agent": "",
+    "mobile": {
+      "manufacturer": "",
+      "model": "",
+      "os_version": "",
+      "location": {
+        "lat": 0,
+        "lng": 0
+      }
+    }
+  },
+  "transaction_c2p": {
+    "amount": amount,
+    "currency": "ves",
+    "destination_bank_id": destination_bank_id,
+    "destination_id": destination_id,  // Encriptado
+    "destination_mobile_number": destination_mobile_number,  // Encriptado
+    "origin_mobile_number": origin_mobile_number,  // Encriptado
+    "payment_reference": payment_reference,
+    "trx_type": "compra",
+    "payment_method": "c2p",
+    "invoice_number": invoice_number,
+    "twofactor_auth": twofactor_auth_encr  // Encriptado
+  }
+});
+```
+
+#### Buscar Transacción C2P
+
+**Function:** `api_mercantil_c2p_search`
+
+```javascript
+const response = await fetch('YOUR_FUNCTION_URL/api_mercantil_c2p_search', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    data: {
+      destination_mobile_number: "584241513063",
+      origin_mobile_number: "584126935529",
+      payment_reference: "987",
+      date_pay: "2025-01-15",
+      amount: 50.00,
+      ipaddress: "127.0.0.1"
+    }
+  })
+});
+```
+
+**Response:**
+```json
+{
+  "message": "Procesado",
+  "data": [
+    {
+      "transaction_id": "123456",
+      "status": "approved",
+      "amount": 50.00,
+      "date": "2025-01-15T10:30:00Z"
+    }
+  ]
+}
+```
+
+## Conciliación TED
+
+### Endpoint: `api_mercantil`
+
+La función principal procesa archivos TED (Transferencia Electrónica de Datos) para conciliación bancaria.
+
+<Steps>
+  <Step title="Listar Lotes">
+    Obtiene lista de archivos disponibles para descarga
+  </Step>
+  <Step title="Descargar Archivo">
+    Descarga archivos .7z con movimientos bancarios
+  </Step>
+  <Step title="Procesar Archivo">
+    Extrae y procesa archivos .cif encriptados
+  </Step>
+  <Step title="Registrar en BD">
+    Guarda movimientos en PostgreSQL
+  </Step>
+</Steps>
+
+**Código de Procesamiento (api_mercantil.js:88-214):**
+
+```javascript
+// 1. Listar archivos disponibles
+axios.post(endpoint + 'listar-lote', {
+  "merchantIdentify": {
+    "integratorId": 31,
+    "merchantId": merchantId_ted,
+    "terminalId": "abcde"
+  },
+  "fromDate": encryption.encryptAES256("2025-10-01", cifr_ted),
+  "toDate": encryption.encryptAES256("2025-10-30", cifr_ted)
+});
+
+// 2. Descargar y extraer archivo .7z
+const base64Trama = response_descarga.data.fileContent;
+const decodedData = Buffer.from(base64Trama, 'base64');
+await fs.writeFile(archivePath, decodedData);
+
+// 3. Extraer contenido usando 7zip
+const seven = extractFull(archivePath, dir_arc, {
+  $bin: pathTo7zip
+});
+
+// 4. Desencriptar archivo .cif
+const cifContent = await fs.readFile(cifPath);
+const decodedCifContent = iconv.decode(cifContent, 'ISO-8859-1');
+const valorarchivo = encryption.decryptAES256(decodedCifContent, cifr_ted);
+
+// 5. Parsear movimientos
+let fecha_reg = valorarchivo.substr(17, 8);
+let num_cta = valorarchivo.substr(41, 20);
+let saldo_total = valorarchivo.substr(102, 17);
+// ... más campos
+
+// 6. Registrar en PostgreSQL
+const conc_conciliado_b = await dbpostgres.sqltmt(
+  "insert", 
+  "conc_conciliado_b", 
+  campos_cociliado_b, 
+  null, null, null, null, 
+  valores_cociliado_b
+);
+```
+
+## Manejo de Errores
+
+### Errores Comunes
+
+<CodeGroup>
+```json Error de Autenticación
+{
+  "message": "Error en el Proceso",
+  "status": 400,
+  "error": {
+    "code": "AUTH_FAILED",
+    "message": "Código de autorización inválido"
+  }
+}
+```
+
+```json Error de Validación
+{
+  "message": "Error",
+  "error": {
+    "code": "INVALID_CARD",
+    "message": "Tarjeta no válida o expirada"
+  }
+}
+```
+
+```json Error de Fondos
+{
+  "message": "Error",
+  "error": {
+    "code": "INSUFFICIENT_FUNDS",
+    "message": "Fondos insuficientes"
+  }
+}
+```
+</CodeGroup>
+
+### Implementación de Manejo de Errores
+
+```javascript
+axios.request(config)
+  .then((response) => {
+    console.log(JSON.stringify(response.data));
+    res.send({ message: "Procesado", data: response.data })
+  })
+  .catch((error) => {
+    console.log(error);
+    console.log(error.response.data);
+    res.send({ message: "Error", error: error.response.data })
+  });
+```
+
+## Códigos Bancarios
+
+Códigos de bancos venezolanos para pagos C2P:
+
+| Banco | Código |
+|-------|--------|
+| Banco de Venezuela | 0102 |
+| Mercantil | 0105 |
+| Banesco | 0134 |
+| Provincial | 0108 |
+| Bicentenario | 0175 |
+
+## Seguridad
+
+<Warning>
+  **Datos Sensibles Encriptados:**
+  - CVV de tarjetas
+  - Códigos de autenticación 2FA
+  - Números de teléfono
+  - Cédulas de identidad
+  - Contenido de archivos TED
+</Warning>
+
+### Ejemplo de Encriptación
+
+```javascript
+const encryption = require("../../../config/encryption");
+const cifr = config.cifr;
+
+// Encriptar
+const cvv_encr = encryption.encryptAES256("752", cifr);
+const twofactor_auth_encr = encryption.encryptAES256("11111111", cifr);
+
+// Desencriptar
+const decrypted = encryption.decryptAES256(encrypted_data, cifr);
+```
+
+## Headers Requeridos
+
+Todas las peticiones a Mercantil requieren:
+
+```javascript
+headers: {
+  'X-IBM-Client-ID': client_id,  // o client_id / clientidibmpm
+  'Content-Type': 'application/json'
+}
+```
+
+<Tip>
+  Para pagos móviles usar `clientidibmpm` en lugar de `client_id`
+</Tip>
+
+## Pruebas
+
+### Datos de Prueba
+
+```javascript
+// Tarjeta de prueba TDD
+{
+  customer_id: "V18366876",
+  card_number: "501878200066287386",
+  cvv: "752",
+  expiration_date: "2025/11",
+  account_type: "cc"
+}
+
+// C2P de prueba
+{
+  destination_id: "V18367443",
+  destination_mobile_number: "584241513063",
+  origin_mobile_number: "584126935529",
+  destination_bank_id: "0102"
+}
+```
+
+## Referencias
+
+- Archivo: `functions/banking/mercantil/api_mercantil.js`
+- Líneas de código clave:
+  - TDD Pay: `api_mercantil.js:286-361`
+  - TDC Pay: `api_mercantil.js:363-433`
+  - C2P Pay: `api_mercantil.js:435-518`
+  - Auth: `api_mercantil.js:233-284`
+  - TED: `api_mercantil.js:46-231`

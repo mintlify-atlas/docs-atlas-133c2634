@@ -1,0 +1,817 @@
+---
+title: 'User Management'
+description: 'Understand user data structures, creation flows, and validation functions for all user types in TMT'
+---
+
+## User Types
+
+TMT supports three distinct user types, each with specific data structures and stored in separate Firestore collections:
+
+<CardGroup cols={3}>
+  <Card title="Clients" icon="building">
+    Event organizers and businesses
+  </Card>
+  <Card title="Collaborators" icon="user-group">
+    Users associated with clients
+  </Card>
+  <Card title="Staff" icon="user-shield">
+    Platform administrators
+  </Card>
+</CardGroup>
+
+## User Data Structures
+
+### Client Users
+
+Clients are event organizers with comprehensive business information. They are stored in the `u_clients` collection.
+
+<ParamField path="name" type="string" required>
+  Full legal name or business name
+</ParamField>
+
+<ParamField path="email" type="string" required>
+  User's email address (used for authentication)
+</ParamField>
+
+<ParamField path="name_commercial" type="string">
+  Commercial or trade name
+</ParamField>
+
+<ParamField path="phone" type="string">
+  Contact phone number
+</ParamField>
+
+<ParamField path="status" type="boolean">
+  Account active status
+</ParamField>
+
+<ParamField path="id" type="string">
+  Government identification number
+</ParamField>
+
+<ParamField path="id_type" type="string">
+  Type of identification document
+</ParamField>
+
+<ParamField path="address" type="object">
+  Physical address information
+  <ParamField path="address.city" type="string">
+    City name
+  </ParamField>
+  <ParamField path="address.country" type="string">
+    Country name
+  </ParamField>
+  <ParamField path="address.line" type="string">
+    Street address
+  </ParamField>
+  <ParamField path="address.zipcode" type="string">
+    Postal/ZIP code
+  </ParamField>
+</ParamField>
+
+<ParamField path="account_type" type="string">
+  Type of client account
+</ParamField>
+
+<ParamField path="commercial_registry" type="string">
+  Business registration number
+</ParamField>
+
+<ParamField path="last_assembly_minutes" type="string">
+  Reference to last assembly meeting minutes
+</ParamField>
+
+<ParamField path="fiscal_info" type="object">
+  Tax and fiscal information
+</ParamField>
+
+<ParamField path="commercial_license" type="string">
+  Business license number
+</ParamField>
+
+<ParamField path="taxpayer_type" type="string">
+  Classification of taxpayer
+</ParamField>
+
+<ParamField path="legal_representative" type="object">
+  Information about legal representative
+</ParamField>
+
+<ParamField path="contact_person" type="object">
+  Primary contact person details
+</ParamField>
+
+<ParamField path="bank_accounts" type="array">
+  Associated bank account information
+</ParamField>
+
+<ParamField path="date" type="object">
+  Timestamp tracking
+  <ParamField path="date.create" type="Timestamp">
+    Account creation timestamp
+  </ParamField>
+  <ParamField path="date.last_update" type="string">
+    Last update timestamp
+  </ParamField>
+  <ParamField path="date.last_access" type="string">
+    Last access timestamp
+  </ParamField>
+</ParamField>
+
+<ParamField path="data" type="object">
+  Usage statistics
+  <ParamField path="data.collaborators" type="number">
+    Number of associated collaborators
+  </ParamField>
+  <ParamField path="data.contracts" type="number">
+    Number of contracts
+  </ParamField>
+  <ParamField path="data.events" type="number">
+    Number of events created
+  </ParamField>
+</ParamField>
+
+<CodeGroup>
+```json Client Data Structure
+{
+  "name": "Acme Events LLC",
+  "email": "contact@acmeevents.com",
+  "name_commercial": "Acme Events",
+  "phone": "+1234567890",
+  "status": true,
+  "id": "123456789",
+  "id_type": "EIN",
+  "address": {
+    "city": "New York",
+    "country": "USA",
+    "line": "123 Event Street",
+    "zipcode": "10001"
+  },
+  "account_type": "business",
+  "commercial_registry": "REG-123456",
+  "taxpayer_type": "corporation",
+  "bank_accounts": [],
+  "date": {
+    "create": "Timestamp",
+    "last_update": "",
+    "last_access": ""
+  },
+  "data": {
+    "collaborators": 0,
+    "contracts": 0,
+    "events": 0
+  }
+}
+```
+</CodeGroup>
+
+### Collaborator Users
+
+Collaborators are users associated with specific clients. They are stored in the `u_collaborators` collection.
+
+<ParamField path="name" type="string" required>
+  Full name of the collaborator
+</ParamField>
+
+<ParamField path="email" type="string" required>
+  Email address for authentication
+</ParamField>
+
+<ParamField path="phone" type="string">
+  Contact phone number
+</ParamField>
+
+<ParamField path="status" type="boolean">
+  Account active status
+</ParamField>
+
+<ParamField path="account_type" type="string">
+  Type of collaborator account
+</ParamField>
+
+<ParamField path="client" type="string" required>
+  Reference to the parent client UID
+</ParamField>
+
+<ParamField path="id" type="string">
+  Government identification number
+</ParamField>
+
+<ParamField path="id_type" type="string">
+  Type of identification document
+</ParamField>
+
+<ParamField path="address" type="object">
+  Physical address information
+  <ParamField path="address.city" type="string">
+    City name
+  </ParamField>
+  <ParamField path="address.country" type="string">
+    Country name
+  </ParamField>
+  <ParamField path="address.line" type="string">
+    Street address
+  </ParamField>
+  <ParamField path="address.zipcode" type="string">
+    Postal/ZIP code
+  </ParamField>
+</ParamField>
+
+<ParamField path="date" type="object">
+  Timestamp tracking
+  <ParamField path="date.create" type="Timestamp">
+    Account creation timestamp
+  </ParamField>
+  <ParamField path="date.last_update" type="string">
+    Last update timestamp
+  </ParamField>
+  <ParamField path="date.last_access" type="string">
+    Last access timestamp
+  </ParamField>
+</ParamField>
+
+<CodeGroup>
+```json Collaborator Data Structure
+{
+  "name": "John Doe",
+  "email": "john@acmeevents.com",
+  "phone": "+1234567890",
+  "status": true,
+  "account_type": "collaborator",
+  "client": "client-uid-here",
+  "id": "987654321",
+  "id_type": "passport",
+  "address": {
+    "city": "New York",
+    "country": "USA",
+    "line": "456 Collaborator Ave",
+    "zipcode": "10002"
+  },
+  "date": {
+    "create": "Timestamp",
+    "last_update": "",
+    "last_access": ""
+  }
+}
+```
+</CodeGroup>
+
+<Note>
+  The `client` field links collaborators to their parent client, establishing the organizational hierarchy.
+</Note>
+
+### Staff Users
+
+Staff are internal platform administrators with system-wide access. They are stored in the `u_staff` collection.
+
+<ParamField path="name" type="string" required>
+  Full name of staff member
+</ParamField>
+
+<ParamField path="email" type="string" required>
+  Email address for authentication
+</ParamField>
+
+<ParamField path="phone" type="string">
+  Contact phone number
+</ParamField>
+
+<ParamField path="status" type="boolean">
+  Account active status
+</ParamField>
+
+<ParamField path="account_type" type="string">
+  Type of staff account
+</ParamField>
+
+<ParamField path="id" type="string">
+  Government identification number
+</ParamField>
+
+<ParamField path="id_type" type="string">
+  Type of identification document
+</ParamField>
+
+<ParamField path="address" type="object">
+  Physical address information
+  <ParamField path="address.city" type="string">
+    City name
+  </ParamField>
+  <ParamField path="address.country" type="string">
+    Country name
+  </ParamField>
+  <ParamField path="address.line" type="string">
+    Street address
+  </ParamField>
+  <ParamField path="address.zipcode" type="string">
+    Postal/ZIP code
+  </ParamField>
+</ParamField>
+
+<ParamField path="commercial_name" type="string">
+  Display name for the staff member
+</ParamField>
+
+<ParamField path="security_2fa" type="object">
+  Two-factor authentication settings
+  <ParamField path="security_2fa.status" type="boolean">
+    Whether 2FA is enabled (default: false)
+  </ParamField>
+  <ParamField path="security_2fa.type" type="string">
+    Type of 2FA (default: "email")
+  </ParamField>
+</ParamField>
+
+<ParamField path="timezone" type="string">
+  Staff member's timezone
+</ParamField>
+
+<ParamField path="date" type="object">
+  Timestamp tracking
+  <ParamField path="date.create" type="Timestamp">
+    Account creation timestamp
+  </ParamField>
+  <ParamField path="date.last_update" type="string">
+    Last update timestamp
+  </ParamField>
+  <ParamField path="date.last_access" type="string">
+    Last access timestamp
+  </ParamField>
+</ParamField>
+
+<CodeGroup>
+```json Staff Data Structure
+{
+  "name": "Jane Admin",
+  "email": "jane@tmt-admin.com",
+  "phone": "+1234567890",
+  "status": true,
+  "account_type": "staff",
+  "id": "456789123",
+  "id_type": "national_id",
+  "address": {
+    "city": "San Francisco",
+    "country": "USA",
+    "line": "789 Admin Boulevard",
+    "zipcode": "94102"
+  },
+  "commercial_name": "Jane A.",
+  "security_2fa": {
+    "status": false,
+    "type": "email"
+  },
+  "timezone": "",
+  "date": {
+    "create": "Timestamp",
+    "last_update": "",
+    "last_access": ""
+  }
+}
+```
+</CodeGroup>
+
+<Info>
+  Staff users have a 2FA configuration object, indicating enhanced security requirements for administrative access.
+</Info>
+
+## Key Differences Between User Types
+
+<CardGroup cols={3}>
+  <Card title="Clients">
+    - Most comprehensive data structure
+    - Business and fiscal information
+    - Legal representative details
+    - Bank account information
+    - Usage statistics tracking
+  </Card>
+  
+  <Card title="Collaborators">
+    - Linked to a parent client
+    - Simplified data structure
+    - No business information
+    - Personal identification only
+  </Card>
+  
+  <Card title="Staff">
+    - Independent of clients
+    - 2FA security settings
+    - Timezone configuration
+    - Commercial name field
+    - Platform administration access
+  </Card>
+</CardGroup>
+
+## Creating Users
+
+All user creation follows the same pattern:
+
+<Steps>
+  <Step title="Create Firebase Auth User">
+    First, create the authentication user with email and password.
+    
+    ```javascript
+    const userRecord = await auth.createUser({
+      email: email,
+      password: password
+    });
+    const uid = userRecord.uid;
+    ```
+  </Step>
+  
+  <Step title="Store User Data in Firestore">
+    Use the UID as the document ID in the appropriate collection.
+    
+    ```javascript
+    await db.collection('u_clients').doc(uid).set(userData);
+    ```
+  </Step>
+  
+  <Step title="Return UID to Client">
+    Respond with the newly created UID.
+    
+    ```javascript
+    response.json({ 
+      message: `Ingresado con el ID: ${uid}`,
+      status: 200,
+      data: { uid: uid }
+    });
+    ```
+  </Step>
+</Steps>
+
+### Create Client
+
+Source: `create_client.js:11-75`
+
+<CodeGroup>
+```javascript Request
+POST /create_client
+{
+  "data": {
+    "name": "Acme Events LLC",
+    "email": "contact@acmeevents.com",
+    "password": "securepassword123",
+    "name_commercial": "Acme Events",
+    "phone": "+1234567890",
+    "status": true,
+    "id": "123456789",
+    "id_type": "EIN",
+    "city": "New York",
+    "country": "USA",
+    "line": "123 Event Street",
+    "zip_code": "10001",
+    "account_type": "business",
+    "commercial_registry": "REG-123456",
+    "taxpayer_type": "corporation",
+    "bank_accounts": []
+  }
+}
+```
+
+```json Success Response
+{
+  "message": "Ingresado con el ID: abc123uid",
+  "status": 200,
+  "data": {
+    "uid": "abc123uid"
+  }
+}
+```
+
+```json Error Response
+{
+  "message": "Error creando nuevo usuario:",
+  "status": 400,
+  "data": {
+    "error": {}
+  }
+}
+```
+</CodeGroup>
+
+### Create Collaborator
+
+Source: `create_collaborator.js:11-62`
+
+<CodeGroup>
+```javascript Request
+POST /create_collaborator
+{
+  "data": {
+    "name": "John Doe",
+    "email": "john@acmeevents.com",
+    "password": "securepassword456",
+    "phone": "+1234567890",
+    "status": false,
+    "account_type": "collaborator",
+    "client": "client-uid-here",
+    "id": "987654321",
+    "id_type": "passport",
+    "city": "New York",
+    "country": "USA",
+    "line": "456 Collaborator Ave",
+    "zip_code": "10002"
+  }
+}
+```
+
+```json Success Response
+{
+  "message": "Ingresado con el ID: xyz789uid",
+  "status": 200,
+  "data": {
+    "uid": "xyz789uid"
+  }
+}
+```
+</CodeGroup>
+
+<Warning>
+  Collaborator accounts are created with `status: false` by default and must be validated via email before activation.
+</Warning>
+
+### Create Staff
+
+Source: `create_staff.js:11-67`
+
+<CodeGroup>
+```javascript Request
+POST /create_staff
+{
+  "data": {
+    "name": "Jane Admin",
+    "email": "jane@tmt-admin.com",
+    "password": "securepassword789",
+    "phone": "+1234567890",
+    "status": true,
+    "account_type": "staff",
+    "id": "456789123",
+    "id_type": "national_id",
+    "city": "San Francisco",
+    "country": "USA",
+    "line": "789 Admin Boulevard",
+    "zip_code": "94102",
+    "commercial_name": "Jane A."
+  }
+}
+```
+
+```json Success Response
+{
+  "message": "Ingresado con el ID: def456uid",
+  "status": 200,
+  "data": {
+    "uid": "def456uid"
+  }
+}
+```
+</CodeGroup>
+
+## User Validation Functions
+
+### Validate User Platform
+
+Checks if a user exists in a specific collection based on email.
+
+Source: `validate_user.js:11-28`
+
+<CodeGroup>
+```javascript Request
+POST /validate_user_platform
+{
+  "data": {
+    "platform": "u_clients",
+    "email": "contact@acmeevents.com"
+  }
+}
+```
+
+```json Success Response
+{
+  "message": "User allowed",
+  "status": 200,
+  "data": {
+    "valido": true
+  }
+}
+```
+
+```json Error Response
+{
+  "message": "User not allowed",
+  "status": 400,
+  "data": {
+    "valido": false
+  }
+}
+```
+</CodeGroup>
+
+<ParamField path="platform" type="string" required>
+  Collection name to search: `u_clients`, `u_collaborators`, or `u_staff`
+</ParamField>
+
+<ParamField path="email" type="string" required>
+  Email address to validate
+</ParamField>
+
+### Validate User Type
+
+Verifies both email existence and account type match.
+
+Source: `validate_user.js:30-58`
+
+<CodeGroup>
+```javascript Request
+POST /validate_user_type
+{
+  "data": {
+    "platform": "u_collaborators",
+    "email": "john@acmeevents.com",
+    "account_type": "collaborator"
+  }
+}
+```
+
+```json Success Response
+{
+  "message": "User allowed",
+  "status": 200,
+  "data": {
+    "valido": true
+  }
+}
+```
+
+```json Error Response
+{
+  "message": "User not allowed",
+  "status": 400,
+  "data": {
+    "valido": false
+  }
+}
+```
+</CodeGroup>
+
+<ParamField path="platform" type="string" required>
+  Collection name to search
+</ParamField>
+
+<ParamField path="email" type="string" required>
+  Email address to validate
+</ParamField>
+
+<ParamField path="account_type" type="string" required>
+  Expected account type
+</ParamField>
+
+### Validate User Email
+
+Confirms email ownership and activates the user account.
+
+Source: `validate_user.js:75-107`
+
+<CodeGroup>
+```javascript Request
+POST /validate_user_email
+{
+  "data": {
+    "uid_user": "xyz789uid",
+    "email": "john@acmeevents.com"
+  }
+}
+```
+
+```json Success Response
+{
+  "data": {
+    "message": "Usuario validado y actualizado correctamente.",
+    "status": 200
+  }
+}
+```
+
+```json Error Responses
+// User not found
+{
+  "data": {
+    "message": "Usuario no encontrado.",
+    "status": 404
+  }
+}
+
+// Email mismatch
+{
+  "data": {
+    "message": "El correo electrónico no coincide.",
+    "status": 403
+  }
+}
+
+// Missing parameters
+{
+  "data": {
+    "message": "El UID y el correo son obligatorios.",
+    "status": 400
+  }
+}
+```
+</CodeGroup>
+
+<ParamField path="uid_user" type="string" required>
+  User's Firebase UID
+</ParamField>
+
+<ParamField path="email" type="string" required>
+  Email to validate against user record
+</ParamField>
+
+<Info>
+  This function specifically targets the `u_collaborators` collection and sets `status: true` upon successful validation.
+</Info>
+
+## Common Patterns
+
+### Address Structure
+
+All user types share the same address structure:
+
+```javascript
+address: {
+  city: string,
+  country: string,
+  line: string,
+  zipcode: string
+}
+```
+
+### Date Tracking
+
+All user types track creation and update timestamps:
+
+```javascript
+date: {
+  create: Timestamp,      // Set on creation
+  last_update: string,    // Empty initially
+  last_access: string     // Empty initially
+}
+```
+
+### Error Handling
+
+All creation functions follow the same error pattern:
+
+<CodeGroup>
+```javascript Error Handling
+auth.createUser({ email, password })
+  .then((userRecord) => {
+    uid = userRecord.uid;
+    // Continue with Firestore write
+  })
+  .catch((error) => {
+    console.log('Error creating new user:', error);
+    response.json({
+      message: 'Error creando nuevo usuario:',
+      status: 400,
+      data: { error: error }
+    });
+  });
+```
+</CodeGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="UID as Document ID" icon="key">
+    Always use Firebase Auth UID as the Firestore document ID for direct user-to-data linking.
+  </Card>
+  
+  <Card title="Timestamp Creation" icon="clock">
+    Use `Timestamp.now()` for the creation date to ensure server-side timestamp accuracy.
+  </Card>
+  
+  <Card title="Validate Before Creation" icon="shield-check">
+    Check if email already exists before creating a new user to prevent duplicates.
+  </Card>
+  
+  <Card title="Secure Passwords" icon="lock">
+    Enforce strong password requirements on the client side before submission.
+  </Card>
+</CardGroup>
+
+<Tip>
+  When creating collaborators, always validate that the parent client UID exists before proceeding with user creation.
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication Overview" icon="shield" href="/auth/overview">
+    Learn about session management and security best practices
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/users/create-client">
+    Explore detailed API endpoint documentation
+  </Card>
+</CardGroup>

@@ -1,0 +1,247 @@
+---
+title: 'Platform Data Indicators'
+description: 'API endpoints for tracking overall platform metrics including offices, collaborators, and general statistics'
+---
+
+## Offices vs Active Offices
+
+`POST /offices_vs_offices_active`
+
+Compares the total number of offices registered in the system against the number of active offices for a specific event. Provides counts of active and inactive offices.
+
+### Request Parameters
+
+<ParamField body="event_id" type="string" required>
+  The unique identifier of the event to check office status against
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Response message description
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="result" type="array">
+    Array containing office statistics (typically single element)
+    <ResponseField name="total" type="number">
+      Total number of offices associated with the event
+    </ResponseField>
+    <ResponseField name="total_activas" type="number">
+      Number of offices that are currently active
+    </ResponseField>
+    <ResponseField name="total_inactivas" type="number">
+      Number of offices that are currently inactive
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```json
+{
+  "data": {
+    "event_id": "evt_123456"
+  }
+}
+```
+
+### Example Response
+
+```json
+{
+  "message": "Datos cantidad de taquillas vs taquillas activas ",
+  "status": 200,
+  "data": {
+    "result": [
+      {
+        "total": 25,
+        "total_activas": 18,
+        "total_inactivas": 7
+      }
+    ]
+  }
+}
+```
+
+<Card title="Understanding Office Status" icon="info-circle">
+  An office is considered "active" if it has status set to true in the system and is associated with the specified event. This metric helps track operational capacity for each event.
+</Card>
+
+---
+
+## General Platform Data
+
+`POST /general_platform_data`
+
+Retrieves high-level statistics about the entire TMT platform, including counts of events, offices, collaborators, and clients.
+
+### Request Parameters
+
+<ParamField body="data" type="object">
+  Empty object (no parameters required)
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Response message description
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="result" type="array">
+    Array containing platform-wide statistics (typically single element)
+    <ResponseField name="total_events" type="number">
+      Total number of events in the platform
+    </ResponseField>
+    <ResponseField name="total_offices" type="number">
+      Total number of offices registered
+    </ResponseField>
+    <ResponseField name="total_collaborators" type="number">
+      Total number of collaborator accounts
+    </ResponseField>
+    <ResponseField name="total_clients" type="number">
+      Total number of client accounts
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```json
+{
+  "data": {}
+}
+```
+
+### Example Response
+
+```json
+{
+  "message": "Datos Generales de la plataforma ",
+  "status": 200,
+  "data": {
+    "result": [
+      {
+        "total_events": 156,
+        "total_offices": 45,
+        "total_collaborators": 238,
+        "total_clients": 1842
+      }
+    ]
+  }
+}
+```
+
+<CardGroup cols={2}>
+  <Card title="Events" icon="calendar">
+    Total events created across all clients
+  </Card>
+  <Card title="Offices" icon="building">
+    Physical and virtual box offices
+  </Card>
+  <Card title="Collaborators" icon="users">
+    Staff members managing the platform
+  </Card>
+  <Card title="Clients" icon="user">
+    Customer accounts in the system
+  </Card>
+</CardGroup>
+
+---
+
+## Types of Collaborators
+
+`POST /types_of_collaborators`
+
+Retrieves a breakdown of collaborators by account type. Shows how many collaborators exist for each type defined in the system.
+
+### Request Parameters
+
+<ParamField body="data" type="object">
+  Empty object (no parameters required)
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Response message description
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="result" type="array">
+    Array of collaborator counts by account type
+    <ResponseField name="account_type" type="string">
+      The name/type of the collaborator account (e.g., "Admin", "Supervisor", "Cashier")
+    </ResponseField>
+    <ResponseField name="total_collaborators" type="number">
+      Number of collaborators with this account type
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```json
+{
+  "data": {}
+}
+```
+
+### Example Response
+
+```json
+{
+  "message": "Cantidad de tipos de Colaboradores ",
+  "status": 200,
+  "data": {
+    "result": [
+      {
+        "account_type": "Admin",
+        "total_collaborators": 12
+      },
+      {
+        "account_type": "Supervisor",
+        "total_collaborators": 35
+      },
+      {
+        "account_type": "Cashier",
+        "total_collaborators": 148
+      },
+      {
+        "account_type": "Support",
+        "total_collaborators": 43
+      }
+    ]
+  }
+}
+```
+
+<Card title="Account Types" icon="user-tag">
+  Collaborator types are defined in the `data/collaborator_types` collection. This endpoint dynamically queries all defined types and counts active users for each.
+</Card>
+
+---
+
+## Notes
+
+All platform data endpoints retrieve real-time information from Firebase Firestore collections:
+- `events` - Event records
+- `offices` - Box office/taquilla records
+- `u_collaborators` - Collaborator user accounts
+- `u_clients` - Client user accounts
+- `data/collaborator_types` - Account type definitions
+
+These metrics are useful for administrative dashboards and platform monitoring.

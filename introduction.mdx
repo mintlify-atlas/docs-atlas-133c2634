@@ -1,0 +1,111 @@
+---
+title: Introducción
+description: Sistema completo de gestión de boletería para eventos con Firebase Cloud Functions
+---
+
+# Bienvenido a TMT
+
+TMT es un sistema completo de gestión de boletería construido sobre Firebase Cloud Functions. Proporciona una API robusta para la venta de boletos, procesamiento de pagos, control de acceso y facturación digital automatizada.
+
+<CardGroup cols={2}>
+  <Card title="Inicio Rápido" icon="rocket" href="/quickstart">
+    Configura tu primera función en minutos
+  </Card>
+  <Card title="Arquitectura" icon="sitemap" href="/architecture">
+    Entiende cómo funciona el sistema
+  </Card>
+  <Card title="Referencia API" icon="code" href="/api/users/create-client">
+    Explora todos los endpoints disponibles
+  </Card>
+  <Card title="Integraciones" icon="plug" href="/api/integrations/seatsio">
+    Conecta con servicios externos
+  </Card>
+</CardGroup>
+
+## Características Principales
+
+<CardGroup cols={2}>
+  <Card title="Gestión de Eventos" icon="calendar" href="/modules/events">
+    Sistema completo para crear y administrar eventos con zonas, asientos y precios configurables
+  </Card>
+  <Card title="Venta de Boletos" icon="ticket" href="/modules/tickets">
+    Generación automática de boletos, bloqueo/desbloqueo, y trazabilidad completa con ledger
+  </Card>
+  <Card title="Múltiples Métodos de Pago" icon="credit-card" href="/payments/overview">
+    Integración con Mercantil, Banco de Venezuela y Stripe para pagos internacionales
+  </Card>
+  <Card title="Control de Acceso" icon="door-open" href="/operations/access-control">
+    Sistema de credenciales y checkpoints para controlar entradas y salidas en tiempo real
+  </Card>
+  <Card title="Taquillas Offline" icon="wifi-slash" href="/operations/offline-mode">
+    Modo sin conexión para taquillas con sincronización posterior
+  </Card>
+  <Card title="Facturación Digital" icon="file-invoice" href="/billing/digital-invoicing">
+    Emisión automática de facturas digitales integradas con el flujo de órdenes
+  </Card>
+  <Card title="Indicadores y Reportes" icon="chart-line" href="/api/indicators/sales">
+    Métricas en tiempo real sobre ventas, distribución y rendimiento
+  </Card>
+  <Card title="Seats.io" icon="chair" href="/api/integrations/seatsio">
+    Mapas interactivos de asientos para eventos con asignación visual
+  </Card>
+</CardGroup>
+
+## Arquitectura del Sistema
+
+TMT está construido como un conjunto de Firebase Cloud Functions que se comunican con:
+
+- **Firestore**: Base de datos principal para eventos, boletos, órdenes y usuarios
+- **PostgreSQL**: Base de datos secundaria para consultas analíticas y reportes
+- **Firebase Auth**: Gestión de autenticación de usuarios
+- **Firebase Storage**: Almacenamiento de archivos y documentos
+
+<Note>
+Todas las funciones están diseñadas para ser invocadas como HTTPS requests con CORS habilitado para integración desde múltiples clientes.
+</Note>
+
+## Tipos de Usuarios
+
+El sistema soporta tres tipos principales de usuarios:
+
+1. **Clientes** (`u_clients`): Organizadores de eventos que crean y administran sus propios eventos
+2. **Colaboradores** (`u_collaborators`): Personal que trabaja para los clientes
+3. **Staff** (`u_staff`): Personal administrativo de la plataforma TMT
+
+<Info>
+Cada tipo de usuario tiene permisos y capacidades diferentes dentro del sistema. Consulta la sección de [Autenticación](/auth/overview) para más detalles.
+</Info>
+
+## Flujo Principal
+
+<Steps>
+  <Step title="Crear un evento">
+    Un cliente crea un evento con fechas, zonas y configuración de asientos
+  </Step>
+  <Step title="Generar boletos">
+    El sistema genera automáticamente todos los boletos basándose en la configuración de zonas
+  </Step>
+  <Step title="Asignar taquillas">
+    Se configuran taquillas (físicas u online) para vender los boletos
+  </Step>
+  <Step title="Procesar órdenes">
+    Los compradores realizan órdenes que incluyen boletos y transacciones de pago
+  </Step>
+  <Step title="Control de acceso">
+    En el día del evento, se validan los boletos y se registran entradas/salidas
+  </Step>
+  <Step title="Facturación y conciliación">
+    Se generan facturas automáticamente y se concilian los pagos con los bancos
+  </Step>
+</Steps>
+
+## Próximos Pasos
+
+<CardGroup cols={2}>
+  <Card title="Sigue el Quickstart" icon="play" href="/quickstart">
+    Aprende a realizar tu primera llamada a la API
+  </Card>
+  <Card title="Explora los Módulos" icon="cube" href="/modules/events">
+    Conoce en detalle cada módulo del sistema
+  </Card>
+</CardGroup>

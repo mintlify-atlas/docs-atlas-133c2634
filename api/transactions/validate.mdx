@@ -1,0 +1,442 @@
+---
+title: 'Validar Transacción'
+api: 'POST /transactions_validate'
+description: 'Valida una transacción específica dentro de una orden existente mediante payment_data'
+---
+
+## Descripción
+
+Esta función HTTP valida una transacción específica dentro de una orden existente. Compara el `payment_data` proporcionado con las transacciones de la orden y marca como válida (`status: true`) la transacción que coincida.
+
+<Note>
+  Esta función está diseñada para validar transacciones pendientes, típicamente usada en procesos de conciliación bancaria o verificación de pagos.
+</Note>
+
+## Endpoint
+
+```
+POST https://your-region-your-project.cloudfunctions.net/transactions_validate
+```
+
+## Parámetros de Solicitud
+
+<ParamField body="idOrder" type="string" required>
+  ID de la orden que contiene la transacción a validar
+</ParamField>
+
+<ParamField body="payment_data" type="string" required>
+  Dato de pago que identifica la transacción (ej: referencia bancaria, últimos 4 dígitos de tarjeta, número de autorización)
+</ParamField>
+
+## Lógica de Validación
+
+La función realiza los siguientes pasos:
+
+### 1. Obtención de la Orden
+
+```javascript
+await db.collection("orders").doc(idOrder)
+  .get()
+  .then(async (snapshot) => {
+    order = snapshot.data();
+  });
+```
+
+### 2. Verificación de Existencia
+
+```javascript
+if (!order) {
+  res.send({
+    message: "Orden no Encontrada",
+    status: 400,
+    data: { valido: false }
+  });
+}
+```
+
+<Warning>
+  Si la orden no existe, la función retorna un error 400 y no procesa la validación.
+</Warning>
+
+### 3. Iteración y Comparación
+
+Recorre todas las transacciones de la orden:
+
+```javascript
+await order.transactions.forEach(async (transactions, index) => {
+  let resp = {
+    amount: transactions.amount,
+    date: transactions.date,
+    payment_data: transactions.payment_data,
+    payment_id: transactions.payment_id,
+    payment_name: transactions.payment_name,
+    custody_account: {
+      id: transactions.custody_account.id,
+      name: transactions.custody_account.name
+    }
+  };
+  
+  if (transactions.payment_data == payment_data) {
+    resp["status"] = true;  // Marca como válida
+  } else {
+    resp["status"] = transactions.status;  // Mantiene status actual
+  }
+  
+  responses[index] = resp;
+});
+```
+
+### 4. Actualización de la Orden
+
+```javascript
+let updateData = { transactions: responses };
+var updateOrder = db.collection("orders").doc(idOrder);
+batch.update(updateOrder, updateData);
+await batch.commit();
+```
+
+<Note>
+  La función actualiza el array completo de transacciones, manteniendo el estado de todas las transacciones que no coinciden con el `payment_data` proporcionado.
+</Note>
+
+## Estructura de Transacción en Orden
+
+Cada transacción dentro de una orden tiene:
+
+```javascript
+{
+  amount: 1825.00,
+  date: {
+    created: Timestamp,
+    updated: Timestamp
+  },
+  custody_account: {
+    id: "cust_001",
+    name: "Cuenta Principal",
+    account_number: "0102-1234-5678"
+  },
+  payment_data: "1234",  // Referencia, últimos 4 dígitos, etc.
+  payment_id: "pm_transfer",
+  payment_name: "Transferencia",
+  status: false,  // false = pendiente, true = validada
+  amount_currency: "VEF",
+  amount_exchange: 50.00,
+  amount_exchange_rate: 36.50,
+  point_sale_tmt: false
+}
+```
+
+## Respuesta
+
+<ResponseField name="message" type="string">
+  Mensaje de confirmación de la operación
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  Código de estado HTTP
+  - 200: Validación exitosa
+  - 400: Orden no encontrada
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Datos de respuesta
+  
+  <Expandable title="Propiedades">
+    <ResponseField name="valido" type="boolean">
+      Indica si la operación fue exitosa
+      - true: Transacción validada correctamente
+      - false: Orden no encontrada
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Ejemplo de Solicitud
+
+```json
+{
+  "idOrder": "ord_1a2b3c4d5e6f",
+  "payment_data": "1234"
+}
+```
+
+## Ejemplo de Respuesta Exitosa
+
+```json
+{
+  "message": "Order Update",
+  "status": 200,
+  "data": {
+    "valido": true
+  }
+}
+```
+
+## Ejemplo de Respuesta con Error
+
+```json
+{
+  "message": "Orden no Encontrada",
+  "status": 400,
+  "data": {
+    "valido": false
+  }
+}
+```
+
+## Casos de Uso
+
+### 1. Validación Manual de Transferencia
+
+Un administrador verifica una transferencia bancaria:
+
+```javascript
+// Cliente reporta transferencia con referencia "987654"
+// Administrador valida manualmente
+POST /transactions_validate
+{
+  "idOrder": "ord_xyz789",
+  "payment_data": "987654"
+}
+```
+
+### 2. Conciliación Bancaria Automática
+
+Sistema de conciliación procesa archivo del banco:
+
+```javascript
+// Por cada transacción en el archivo bancario
+bankTransactions.forEach(async (bankTx) => {
+  await transactions_validate({
+    idOrder: bankTx.orderId,
+    payment_data: bankTx.reference
+  });
+});
+```
+
+### 3. Validación de Tarjeta de Crédito
+
+Sistema valida pago con tarjeta usando últimos 4 dígitos:
+
+```javascript
+POST /transactions_validate
+{
+  "idOrder": "ord_abc123",
+  "payment_data": "4532"  // Últimos 4 dígitos de la tarjeta
+}
+```
+
+## Comportamiento con Múltiples Transacciones
+
+Si una orden tiene múltiples transacciones:
+
+```javascript
+// Orden con 3 transacciones
+{
+  order_id: "ord_multi123",
+  amount: 300.00,
+  transactions: [
+    {
+      payment_data: "1111",
+      amount: 100.00,
+      status: false  // Pendiente
+    },
+    {
+      payment_data: "2222",
+      amount: 100.00,
+      status: true   // Ya validada
+    },
+    {
+      payment_data: "3333",
+      amount: 100.00,
+      status: false  // Pendiente
+    }
+  ]
+}
+
+// Validar la transacción "3333"
+POST /transactions_validate
+{
+  "idOrder": "ord_multi123",
+  "payment_data": "3333"
+}
+
+// Resultado:
+transactions: [
+  { payment_data: "1111", status: false },  // Sin cambio
+  { payment_data: "2222", status: true },   // Sin cambio
+  { payment_data: "3333", status: true }    // Ahora validada
+]
+```
+
+<Note>
+  Solo la transacción que coincide con el `payment_data` cambia su `status` a `true`. Las demás transacciones mantienen su estado actual.
+</Note>
+
+## Integración con order_process
+
+La validación de transacciones puede afectar el procesamiento:
+
+```javascript
+// Si se valida una transacción después de crear la orden
+// y ANTES de que se procese order_process:
+
+// 1. Se crea orden con status: false
+POST /order_created
+{
+  status: false,  // No procesa automáticamente
+  transactions: [{ payment_data: "1234", status: false }]
+}
+
+// 2. Se valida la transacción
+POST /transactions_validate
+{
+  idOrder: "ord_xyz789",
+  payment_data: "1234"
+}
+
+// 3. Se actualiza orden para procesar
+db.collection("orders").doc("ord_xyz789").update({
+  status: true  // Ahora sí dispara order_process
+});
+```
+
+<Warning>
+  Si una orden ya fue procesada por `order_process`, validar una transacción NO vuelve a ejecutar el split. La validación es principalmente para auditoría y conciliación.
+</Warning>
+
+## Código Fuente
+
+Implementación completa:
+
+```javascript
+exports.transactions_validate = functions.https.onRequest(async (req, res) => {
+  cors(req, res, async() => {
+    let order = "";
+    let idOrder = "-";
+    let payment_data = "-";
+    
+    await db.collection("orders").doc(idOrder)
+      .get()
+      .then(async (snapshot) => {
+        order = snapshot.data();
+        
+        if (!order) {
+          res.send({
+            message: "Orden no Encontrada",
+            status: 400,
+            data: { valido: false }
+          });
+        } else {
+          let responses = [{}];
+          
+          await order.transactions.forEach(async (transactions, index) => {
+            let resp = {};
+            resp["amount"] = transactions.amount;
+            resp["date"] = transactions.date;
+            
+            if (transactions.payment_data == payment_data) {
+              resp["status"] = true;
+            } else {
+              resp["status"] = transactions.status;
+            }
+            
+            resp["payment_data"] = transactions.payment_data;
+            resp["payment_id"] = transactions.payment_id;
+            resp["payment_name"] = transactions.payment_name;
+            resp["custody_account"] = {
+              id: transactions.custody_account.id,
+              name: transactions.custody_account.name
+            };
+            
+            responses[index] = resp;
+          });
+          
+          let updateData = { transactions: responses };
+          var updateOrder = db.collection("orders").doc(idOrder);
+          batch.update(updateOrder, updateData);
+        }
+      });
+    
+    await batch.commit();
+    res.send({
+      message: "Order Update",
+      status: 200,
+      data: { valido: true }
+    });
+  });
+});
+```
+
+## Ubicación en Código
+
+**Función:** `transactions_validate`  
+**Archivo:** `functions/transactions_validate/transactions_validate.js:28-73`  
+**Tipo:** HTTP Request Function
+
+## Consideraciones
+
+<Warning>
+  - La función no valida si el `payment_data` existe antes de actualizar
+  - Si el `payment_data` no coincide con ninguna transacción, todas quedan sin cambios
+  - No hay logging de qué transacción fue validada
+  - Los valores `idOrder` y `payment_data` están hardcodeados como "-" en el código actual
+</Warning>
+
+<Note>
+  - La validación es idempotente: validar la misma transacción múltiples veces no causa problemas
+  - El batch commit asegura atomicidad en la actualización
+  - Solo se actualiza Firestore, no hay sincronización con PostgreSQL
+</Note>
+
+## Mejoras Sugeridas
+
+Para implementación en producción:
+
+1. **Obtener parámetros del request body:**
+   ```javascript
+   let idOrder = req.body.data.idOrder;
+   let payment_data = req.body.data.payment_data;
+   ```
+
+2. **Validar que payment_data exista:**
+   ```javascript
+   let found = false;
+   order.transactions.forEach(tx => {
+     if (tx.payment_data == payment_data) found = true;
+   });
+   if (!found) {
+     return res.send({
+       message: "Transacción no encontrada",
+       status: 404,
+       data: { valido: false }
+     });
+   }
+   ```
+
+3. **Agregar logging:**
+   ```javascript
+   console.log(`Validando transacción en orden ${idOrder} con payment_data: ${payment_data}`);
+   ```
+
+4. **Sincronizar con PostgreSQL:**
+   ```javascript
+   await dbpostgres.sqltmt(
+     "update",
+     "orders",
+     "transactions = '" + JSON.stringify(responses) + "'",
+     "id = '" + idOrder + "'"
+   );
+   ```
+
+5. **Retornar información útil:**
+   ```javascript
+   res.send({
+     message: "Transacción validada",
+     status: 200,
+     data: {
+       valido: true,
+       order_id: idOrder,
+       validated_transaction: validatedTransaction
+     }
+   });
+   ```

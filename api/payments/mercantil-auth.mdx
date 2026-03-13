@@ -1,0 +1,176 @@
+---
+title: 'Autenticación Mercantil'
+api: 'POST /api_mercantil_auth'
+description: 'Solicita autorización previa para pagos con tarjetas de débito Mercantil'
+---
+
+## Descripción General
+
+Este endpoint solicita una autorización previa antes de procesar un pago con tarjeta de débito (TDD) de Banco Mercantil. La autorización valida que la tarjeta y el cliente sean válidos para realizar transacciones.
+
+<Warning>
+Este endpoint requiere configuración del `merchantId` y `X-IBM-Client-ID` en las variables de entorno del sistema.
+</Warning>
+
+## Configuración de Merchant
+
+El endpoint utiliza la siguiente configuración de comercio:
+
+- **Integrator ID**: `31`
+- **Merchant ID**: Configurado en `config.merchantId`
+- **Terminal ID**: `"tmt"`
+- **Client ID**: Configurado en `config.clientidibm`
+
+## Request
+
+### Headers
+
+- `Content-Type`: `application/json`
+- `X-IBM-Client-ID`: Client ID configurado en el sistema
+
+### Body Parameters
+
+<ParamField body="data" type="object" required>
+  Objeto que contiene los datos de la solicitud de autorización
+  
+  <ParamField body="customer_id" type="string" required>
+    Identificación del cliente (cédula). Ejemplo: `"V18366876"`
+  </ParamField>
+  
+  <ParamField body="card_number" type="string" required>
+    Número completo de la tarjeta de débito. Ejemplo: `"501878200066287386"`
+  </ParamField>
+  
+  <ParamField body="ipaddress" type="string" required>
+    Dirección IP del cliente que realiza la solicitud. Ejemplo: `"127.0.0.1"`
+  </ParamField>
+</ParamField>
+
+## Response
+
+### Success Response (200)
+
+<ResponseField name="data" type="object">
+  Datos de la respuesta de autorización del banco
+  
+  <ResponseField name="transaction_authInfo" type="object">
+    Información de la autorización de transacción
+    
+    <ResponseField name="auth_code" type="string">
+      Código de autorización proporcionado por el banco
+    </ResponseField>
+    
+    <ResponseField name="auth_status" type="string">
+      Estado de la autorización: `"approved"` o `"denied"`
+    </ResponseField>
+    
+    <ResponseField name="message" type="string">
+      Mensaje descriptivo del resultado de la autorización
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  Código de estado HTTP: `200` para éxito
+</ResponseField>
+
+### Error Response (400)
+
+<ResponseField name="message" type="string">
+  Mensaje de error: `"Error en el Proceso"`
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  Código de estado HTTP: `400`
+</ResponseField>
+
+<ResponseField name="error" type="object">
+  Detalles del error devueltos por la API de Mercantil
+</ResponseField>
+
+## Ejemplo de Uso
+
+<CodeGroup>
+
+```javascript Request
+const axios = require('axios');
+
+const requestData = {
+  data: {
+    customer_id: "V18366876",
+    card_number: "501878200066287386",
+    ipaddress: "192.168.1.100"
+  }
+};
+
+const response = await axios.post(
+  'https://your-domain.com/api_mercantil_auth',
+  requestData
+);
+
+console.log(response.data);
+```
+
+```json Response (Success)
+{
+  "data": {
+    "transaction_authInfo": {
+      "auth_code": "123456",
+      "auth_status": "approved",
+      "message": "Autorización exitosa"
+    }
+  },
+  "status": 200
+}
+```
+
+```json Response (Error)
+{
+  "message": "Error en el Proceso",
+  "status": 400,
+  "error": {
+    "code": "INVALID_CARD",
+    "message": "Número de tarjeta inválido"
+  }
+}
+```
+
+</CodeGroup>
+
+## Flujo de Autorización
+
+<Steps>
+  <Step title="Validar datos del cliente">
+    El sistema valida que se proporcionen todos los datos requeridos: identificación del cliente, número de tarjeta y dirección IP.
+  </Step>
+  
+  <Step title="Preparar solicitud de autorización">
+    Se construye la solicitud con la información del comercio (merchant_identify) y del cliente (client_identify).
+  </Step>
+  
+  <Step title="Enviar solicitud al banco">
+    Se envía la solicitud al endpoint de Mercantil con tipo de transacción `"solaut"` y método de pago `"tdd"`.
+  </Step>
+  
+  <Step title="Recibir respuesta de autorización">
+    El banco valida la tarjeta y retorna un código de autorización que deberá usarse en la transacción de pago posterior.
+  </Step>
+  
+  <Step title="Retornar resultado al cliente">
+    El sistema retorna la respuesta del banco al cliente para continuar con el proceso de pago.
+  </Step>
+</Steps>
+
+## Notas Importantes
+
+- Este endpoint es un paso previo obligatorio antes de realizar un pago con tarjeta de débito
+- El código de autorización obtenido debe usarse en la llamada a `api_mercantil_tdd_pay`
+- La autorización tiene un tiempo de validez limitado definido por el banco
+- El endpoint se conecta al ambiente de producción de Mercantil
+- Todos los datos sensibles deben transmitirse a través de conexiones seguras (HTTPS)
+
+## Endpoints Relacionados
+
+- [Pago con Tarjeta de Débito](/api/payments/mercantil-pay#tarjeta-de-debito) - Procesa el pago después de obtener autorización
+- [Pago con Tarjeta de Crédito](/api/payments/mercantil-pay#tarjeta-de-credito) - Procesa pagos con TDC
+- [Pago C2P](/api/payments/mercantil-pay#c2p-pago-movil) - Procesa pagos móviles

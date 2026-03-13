@@ -1,0 +1,583 @@
+---
+title: 'Access Control'
+description: 'Credential management and venue access control system'
+---
+
+## Overview
+
+The access control system manages credential-based entry and exit tracking for events. It supports both real-time and offline (cold) access control operations, enabling staff to monitor attendee flow and validate credentials at venue checkpoints.
+
+## Access Control Workflow
+
+<Steps>
+  <Step title="Checkpoint Assignment">
+    Collaborators are assigned to event checkpoints with specific access permissions
+  </Step>
+  
+  <Step title="Credential Validation">
+    When a credential is scanned, the system validates it against the event's credential database
+  </Step>
+  
+  <Step title="Entry/Exit Tracking">
+    The system tracks entry and exit status with real-time updates
+  </Step>
+  
+  <Step title="Cold Synchronization">
+    Offline access events are synchronized in batches when connectivity is restored
+  </Step>
+</Steps>
+
+## Data Structures
+
+### Credential Schema
+
+```javascript
+{
+  "id": "credential_id",
+  "access": "string",
+  "access_entry": boolean,
+  "access_status": boolean,
+  "date": {
+    "created": Timestamp,
+    "updated": Timestamp
+  },
+  "description": "string",
+  "holder": "holder_id",
+  "name": "string",
+  "status": boolean
+}
+```
+
+### Checkpoint Schema
+
+```javascript
+{
+  "event_id": "string",
+  "date_end": Timestamp,
+  "date_start": Timestamp,
+  "type": "string",
+  "status": "Activo" | "En Progreso" | "Inactivo",
+  "event": {
+    "media": "url"
+  },
+  "name": "string"
+}
+```
+
+### Ticket Access States
+
+- **`access_status`**: Whether the ticket has been activated for entry (ever entered)
+- **`access_entry`**: Whether the ticket holder is currently inside the venue
+
+## Functions
+
+### events_list_checkpoints
+
+Retrieves all active checkpoints assigned to a collaborator.
+
+**Endpoint:** `POST /events_list_checkpoints`
+
+**Request Body:**
+
+```json
+{
+  "data": {
+    "userd_id": "collaborator_id"
+  }
+}
+```
+
+**Implementation:**
+
+```javascript
+await db.collection("u_collaborators").doc(userd_id)
+  .collection("checkpoints")
+  .where("status", "in", ['Activo', 'En Progreso'])
+  .get()
+  .then(async (snapshot) => {
+    if (snapshot._size > 0) {
+      let responses = [];
+      snapshot.forEach((doc) => {
+        let data = doc.data();
+        let resp = {
+          "event_id": doc.id,
+          "date_end": data.date_end,
+          "date_start": data.date_start,
+          "type": data.type,
+          "status": data.status,
+          "event": data.event.media,
+          "name": data.name
+        };
+        responses.push(resp);
+      });
+    }
+  });
+```
+
+**Response:**
+
+```json
+{
+  "message": "Eventos encontrados",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "eventos": [
+      {
+        "event_id": "event123",
+        "date_end": "2026-03-15T00:00:00Z",
+        "date_start": "2026-03-13T18:00:00Z",
+        "type": "concert",
+        "status": "Activo",
+        "name": "Main Gate Checkpoint"
+      }
+    ]
+  }
+}
+```
+
+### events_list_credentials
+
+Retrieves all active credentials for an event.
+
+**Endpoint:** `POST /events_list_credentials`
+
+**Request Body:**
+
+```json
+{
+  "data": {
+    "event_id": "event_id"
+  }
+}
+```
+
+**Implementation:**
+
+```javascript
+await db.collection("events").doc(event_id)
+  .collection("credentials")
+  .get()
+  .then(async (snapshot) => {
+    if (snapshot._size > 0) {
+      let responses = [];
+      snapshot.forEach((doc) => {
+        let data = doc.data();
+        if (data.status) {
+          responses.push({
+            "id": doc.id,
+            "access": doc.access,
+            "date_created": data.date.created,
+            "date_updated": data.date.updated,
+            "description": data.description,
+            "holder": data.holder,
+            "name": data.name,
+            "status": data.status
+          });
+        }
+      });
+    }
+  });
+```
+
+**Response:**
+
+```json
+{
+  "message": "Credenciales encontradas",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "credenciales": [
+      {
+        "id": "cred123",
+        "description": "VIP Access Pass",
+        "holder": "holder_id",
+        "name": "VIP Pass",
+        "status": true
+      }
+    ]
+  }
+}
+```
+
+### credentials_access_control_in
+
+Processes credential entry into the venue.
+
+**Endpoint:** `POST /credentials_access_control_in`
+
+**Request Body:**
+
+```json
+{
+  "data": {
+    "event_id": "event_id",
+    "credential_id": "credential_id",
+    "holder_id": "holder_id"
+  }
+}
+```
+
+**Access Logic:**
+
+<CodeGroup>
+
+```javascript First Entry
+if (!data.access_entry && !data.access_status) {
+  await db.collection('events').doc(event_id)
+    .collection('credentials').doc(credential_id)
+    .update({
+      "access_status": true, 
+      "access_entry": true,
+      "date.updated": Timestamp.now()
+    });
+  // "Credencial valida Ingresando"
+}
+```
+
+```javascript Re-Entry
+if (!data.access_entry && data.access_status) {
+  await db.collection('events').doc(event_id)
+    .collection('credentials').doc(credential_id)
+    .update({
+      "access_entry": true,
+      "date.updated": Timestamp.now()
+    });
+  // "Credencial valida Re-Ingresando"
+}
+```
+
+```javascript Already Inside
+if (data.access_entry) {
+  // "Credencial ya Entro" - No update needed
+}
+```
+
+</CodeGroup>
+
+**Response:**
+
+<CodeGroup>
+
+```json First Entry
+{
+  "message": "Credencial valida Ingresando",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "message": "Credencial valida Ingresando"
+  }
+}
+```
+
+```json Re-Entry
+{
+  "message": "Credencial valida Re-Ingresando",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "message": "Credencial valida Re-Ingresando"
+  }
+}
+```
+
+```json Already Inside
+{
+  "message": "Credencial ya Entro",
+  "status": 200,
+  "data": {
+    "valido": false,
+    "message": "Credencial ya Entro"
+  }
+}
+```
+
+```json Invalid Credential
+{
+  "message": "Credencial no valida",
+  "status": 400,
+  "data": {
+    "valido": false,
+    "message": "Credencial no valida"
+  }
+}
+```
+
+</CodeGroup>
+
+### credentials_access_control_out
+
+Processes credential exit from the venue.
+
+**Endpoint:** `POST /credentials_access_control_out`
+
+**Request Body:**
+
+```json
+{
+  "data": {
+    "event_id": "event_id",
+    "credential_id": "credential_id",
+    "holder_id": "holder_id"
+  }
+}
+```
+
+**Exit Logic:**
+
+```javascript
+if (data.access_entry && data.access_status) {
+  await db.collection('events').doc(event_id)
+    .collection('credentials').doc(credential_id)
+    .update({
+      "access_entry": false,
+      "date.updated": Timestamp.now()
+    });
+  // "Credencial valida Saliendo"
+} else {
+  // "Credencial NO Entro"
+}
+```
+
+**Response:**
+
+<CodeGroup>
+
+```json Valid Exit
+{
+  "message": "Credencial valida Saliendo",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "message": "Credencial valida Saliendo"
+  }
+}
+```
+
+```json Not Inside
+{
+  "message": "Credencial NO Entro",
+  "status": 200,
+  "data": {
+    "valido": false,
+    "message": "Credencial NO Entro"
+  }
+}
+```
+
+</CodeGroup>
+
+### credentials_access_control_cold
+
+Synchronizes offline (cold) access control events in batch.
+
+**Endpoint:** `POST /credentials_access_control_cold`
+
+**Request Body:**
+
+```json
+{
+  "data": {
+    "tickets_cold": [
+      {
+        "ticket_id": "event1-ticket1",
+        "date": "2026-03-13T18:00:00Z",
+        "tipo": "in"
+      },
+      {
+        "ticket_id": "event1-ticket1",
+        "date": "2026-03-13T22:00:00Z",
+        "tipo": "out"
+      },
+      {
+        "ticket_id": "event1-ticket2",
+        "date": "2026-03-13T18:15:00Z",
+        "tipo": "in"
+      }
+    ]
+  }
+}
+```
+
+**Processing Logic:**
+
+<CodeGroup>
+
+```javascript Deduplication
+const result = procesados.find(
+  (element) => element === cold.ticket_id
+);
+if (result === undefined) {
+  // Process this ticket
+  tickets_cold.find((value, index) => {
+    if (value.ticket_id == cold.ticket_id) {
+      // Add to ledger
+    }
+  });
+  procesados.push(cold.ticket_id);
+}
+```
+
+```javascript Ledger Update
+if (value.tipo == "in") {
+  var action = "accessed";
+  access_entry = true;
+} else {
+  var action = "came-out";
+  access_entry = false;
+}
+
+let resp = {
+  "date": Timestamp.now(),
+  "action": action,
+  "metadata": "{}"
+};
+responses.push(resp);
+```
+
+```javascript Batch Update
+batch.update(
+  db.collection('events').doc(arr_ids[0])
+    .collection('tickets').doc(arr_ids[1]), 
+  {
+    "access_status": true, 
+    "access_entry": access_entry,
+    "date.updated": Timestamp.now(),
+    "ledger": responses
+  }
+);
+```
+
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "message": "Tickets Frios Sincronizados",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "message": "Tickets Frios Sincronizados"
+  }
+}
+```
+
+## Access State Machine
+
+<Steps>
+  <Step title="Never Entered">
+    `access_status: false`, `access_entry: false`
+    
+    Initial state when credential is created
+  </Step>
+  
+  <Step title="First Entry">
+    `access_status: true`, `access_entry: true`
+    
+    Holder enters venue for the first time
+  </Step>
+  
+  <Step title="Exited">
+    `access_status: true`, `access_entry: false`
+    
+    Holder has exited the venue
+  </Step>
+  
+  <Step title="Re-Entry">
+    `access_status: true`, `access_entry: true`
+    
+    Holder re-enters after exiting
+  </Step>
+</Steps>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Real-Time Operations" icon="signal">
+    - Validate credentials immediately at checkpoints
+    - Update access status in real-time when online
+    - Use clear visual indicators for entry states
+    - Handle network failures gracefully
+  </Card>
+  
+  <Card title="Offline Operations" icon="wifi-slash">
+    - Store access events locally when offline
+    - Use cold synchronization for batch updates
+    - Deduplicate events before syncing
+    - Preserve chronological order in ledger
+  </Card>
+</CardGroup>
+
+<Warning>
+  The cold synchronization function processes multiple events per ticket. It deduplicates by ticket ID and only processes the final state from the batch. Ensure events are ordered correctly.
+</Warning>
+
+## Checkpoint Management
+
+Checkpoints are assigned to collaborators and filtered by status:
+
+- **Activo**: Checkpoint is active and ready for use
+- **En Progreso**: Checkpoint is currently in use
+- **Inactivo**: Checkpoint is deactivated (not returned in queries)
+
+<Note>
+  Only checkpoints with status `Activo` or `En Progreso` are returned when listing available checkpoints for a collaborator.
+</Note>
+
+## Ledger Actions for Access Control
+
+| Action | Description | Trigger |
+|--------|-------------|----------|
+| `accessed` | Entry recorded | Credential scanned at entry |
+| `came-out` | Exit recorded | Credential scanned at exit |
+
+<Info>
+  Source: `~/workspace/source/functions/events/control_access/control_access.js:104-268`
+</Info>
+
+## Ticket vs Credential
+
+The system supports both ticket-based and credential-based access:
+
+- **Credentials**: Used for staff, VIP, and special access (stored in `events/{event_id}/credentials`)
+- **Tickets**: Used for regular attendees (stored in `events/{event_id}/tickets` with ledger tracking)
+
+Both use the same access state model (`access_status` and `access_entry`).
+
+## Cold Synchronization Details
+
+<Steps>
+  <Step title="Ticket Validation">
+    Verify tickets exist and are not sold (`status = false`)
+  </Step>
+  
+  <Step title="Deduplication">
+    Process each unique ticket_id only once, considering all events for that ticket
+  </Step>
+  
+  <Step title="Ledger Merge">
+    Combine existing ledger with new access events
+  </Step>
+  
+  <Step title="Final State">
+    The last event type (in/out) determines the final `access_entry` value
+  </Step>
+  
+  <Step title="Dual Update">
+    Update both Firestore and PostgreSQL in sequence
+  </Step>
+</Steps>
+
+<Tip>
+  When implementing offline access control, collect all entry/exit events locally and send them in a single batch to the cold synchronization endpoint when connectivity is restored.
+</Tip>
+
+## Error Scenarios
+
+- **Invalid credential**: Credential document not found
+- **Already inside**: Attempting entry when `access_entry` is already `true`
+- **Not inside**: Attempting exit when `access_entry` is `false`
+- **Inactive credential**: Credential exists but `status` is `false`
+- **No checkpoints**: Collaborator has no active checkpoints assigned

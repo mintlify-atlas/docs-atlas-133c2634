@@ -1,0 +1,251 @@
+---
+title: 'List Event Tickets'
+api: 'POST https://us-central1-tmt-system.cloudfunctions.net/tickets_list_event'
+description: 'Retrieve all tickets for a specific event'
+---
+
+## Overview
+
+This endpoint retrieves all tickets associated with a specific event from the PostgreSQL database. It returns complete ticket information including status, seat assignments, and event details.
+
+## Request
+
+<ParamField body="data" type="object" required>
+  Request data object
+  
+  <ParamField body="data.event_id" type="string" required>
+    The unique identifier of the event whose tickets you want to retrieve
+  </ParamField>
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Status message describing the result of the operation
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success, 400 for error)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data object
+  
+  <ResponseField name="data.valido" type="boolean">
+    Indicates whether the operation was successful
+  </ResponseField>
+  
+  <ResponseField name="data.response" type="array">
+    Array of ticket objects when successful
+    
+    <ResponseField name="id" type="string">
+      Ticket unique identifier
+    </ResponseField>
+    
+    <ResponseField name="ticket_id" type="string">
+      Ticket ID (format: `{event_id}-{generated_id}`)
+    </ResponseField>
+    
+    <ResponseField name="event_id" type="string">
+      Event identifier
+    </ResponseField>
+    
+    <ResponseField name="event_name" type="string">
+      Name of the event
+    </ResponseField>
+    
+    <ResponseField name="event_description" type="string">
+      Description of the event
+    </ResponseField>
+    
+    <ResponseField name="seat_id" type="string">
+      Seat identifier
+    </ResponseField>
+    
+    <ResponseField name="seat_row" type="string">
+      Seat row assignment
+    </ResponseField>
+    
+    <ResponseField name="zone" type="string">
+      Zone name
+    </ResponseField>
+    
+    <ResponseField name="color" type="string">
+      Zone color code
+    </ResponseField>
+    
+    <ResponseField name="status" type="boolean">
+      Ticket availability status (true = available, false = sold/used)
+    </ResponseField>
+    
+    <ResponseField name="date_start" type="string">
+      Event start date
+    </ResponseField>
+    
+    <ResponseField name="date_end" type="string">
+      Event end date
+    </ResponseField>
+    
+    <ResponseField name="date_created" type="string">
+      Ticket creation timestamp
+    </ResponseField>
+    
+    <ResponseField name="date_updated" type="string">
+      Last update timestamp
+    </ResponseField>
+    
+    <ResponseField name="ledger" type="array">
+      Activity log with all ticket actions
+      
+      <ResponseField name="date" type="string">
+        Action timestamp
+      </ResponseField>
+      
+      <ResponseField name="action" type="string">
+        Action type (e.g., "generated", "accessed", "came-out")
+      </ResponseField>
+      
+      <ResponseField name="metadata" type="object">
+        Additional action metadata
+      </ResponseField>
+    </ResponseField>
+    
+    <ResponseField name="access_status" type="boolean">
+      Whether the ticket has been used for access
+    </ResponseField>
+    
+    <ResponseField name="access_entry" type="boolean">
+      Whether the ticket holder is currently inside the event
+    </ResponseField>
+    
+    <ResponseField name="customer_name" type="string">
+      Name of the ticket purchaser
+    </ResponseField>
+    
+    <ResponseField name="customer_email" type="string">
+      Email of the ticket purchaser
+    </ResponseField>
+    
+    <ResponseField name="customer_phone" type="string">
+      Phone number of the ticket purchaser
+    </ResponseField>
+    
+    <ResponseField name="customer_id" type="string">
+      Customer identifier
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+<CodeGroup>
+
+```javascript JavaScript
+const response = await fetch(
+  'https://us-central1-tmt-system.cloudfunctions.net/tickets_list_event',
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      data: {
+        event_id: 'event_123abc'
+      }
+    })
+  }
+);
+
+const result = await response.json();
+console.log(result);
+```
+
+```bash cURL
+curl -X POST \
+  https://us-central1-tmt-system.cloudfunctions.net/tickets_list_event \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "data": {
+      "event_id": "event_123abc"
+    }
+  }'
+```
+
+```python Python
+import requests
+
+url = "https://us-central1-tmt-system.cloudfunctions.net/tickets_list_event"
+payload = {
+    "data": {
+        "event_id": "event_123abc"
+    }
+}
+
+response = requests.post(url, json=payload)
+print(response.json())
+```
+
+</CodeGroup>
+
+## Response Examples
+
+### Success Response
+
+```json
+{
+  "message": "Evento Encontrado",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "response": [
+      {
+        "id": "event_123abc-ticket_xyz",
+        "ticket_id": "event_123abc-ticket_xyz",
+        "event_id": "event_123abc",
+        "event_name": "Concert 2024",
+        "event_description": "Annual music festival",
+        "seat_id": "VIP-1",
+        "seat_row": "A",
+        "zone": "VIP Section",
+        "color": "#FFD700",
+        "status": true,
+        "date_start": "2024-06-15T18:00:00Z",
+        "date_end": "2024-06-15T23:00:00Z",
+        "date_created": "2024-05-01T10:00:00Z",
+        "date_updated": "2024-05-01T10:00:00Z",
+        "ledger": [
+          {
+            "date": "2024-05-01T10:00:00Z",
+            "action": "generated",
+            "metadata": {}
+          }
+        ],
+        "access_status": false,
+        "access_entry": false,
+        "customer_name": null,
+        "customer_email": null,
+        "customer_phone": null,
+        "customer_id": null
+      }
+    ]
+  }
+}
+```
+
+### Error Response
+
+```json
+{
+  "message": "Evento no Encontrado",
+  "status": 400,
+  "data": {
+    "valido": false
+  }
+}
+```
+
+## Notes
+
+- Returns all tickets for the event regardless of their status (available, sold, or used)
+- The response includes customer information if tickets have been purchased
+- The ledger field provides a complete audit trail of all ticket actions
+- Use `status: true` to identify available tickets
+- Use `access_status` and `access_entry` to track real-time event attendance

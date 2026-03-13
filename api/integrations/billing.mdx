@@ -1,0 +1,584 @@
+---
+title: 'Billing & Invoicing'
+description: 'API functions for generating and managing digital invoices through TFHKA integration'
+---
+
+## Overview
+
+The billing integration provides comprehensive invoice generation functionality for both ticket sales and event expenses. It integrates with TFHKA (The Factory HKA) digital invoicing platform to emit legally compliant electronic invoices with tax calculations (IVA, IGTF) and multi-currency support.
+
+<Note>
+All invoices are generated in Venezuelan Bolívares (BSD) as the primary currency, with USD amounts shown in a secondary currency section.
+</Note>
+
+## Authentication
+
+The billing API automatically handles authentication with the TFHKA platform using stored credentials. Each API call:
+
+1. Requests a JWT token from `/api/Autenticacion`
+2. Uses the token in the `Authorization` header for subsequent requests
+3. Token refresh is handled automatically
+
+<Warning>
+Authentication credentials are configured server-side. Never expose TFHKA credentials in client code.
+</Warning>
+
+## Core Invoice Functions
+
+### billing_emision
+
+Emits a digital invoice directly using a pre-formatted billing data structure.
+
+**Endpoint:** `POST /billing_emision`
+
+**Request Body:**
+<ParamField body="body_emision" type="object" required>
+  Complete billing document structure following TFHKA format
+</ParamField>
+
+```json
+{
+  "data": {
+    "body_emision": {
+      "DocumentoElectronico": {
+        "Encabezado": {
+          "IdentificacionDocumento": {
+            "TipoDocumento": "01",
+            "NumeroDocumento": "00000123",
+            "FechaEmision": "13/03/2026",
+            "Moneda": "BSD"
+          },
+          "Comprador": {
+            "TipoIdentificacion": "V",
+            "NumeroIdentificacion": "12345678",
+            "RazonSocial": "Juan Pérez"
+          },
+          "Totales": {
+            "TotalAPagar": "116.00",
+            "TotalIVA": "16.00",
+            "Subtotal": "100.00"
+          }
+        },
+        "DetallesItems": []
+      }
+    }
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "mensaje": "Documento emitido correctamente",
+  "resultado": {
+    "numeroDocumento": "00000123",
+    "urlConsulta": "https://demoemisionv2.thefactoryhka.com.ve/invoice/00000123",
+    "codigoQR": "base64_encoded_qr_code"
+  }
+}
+```
+
+<ResponseField name="mensaje" type="string">
+  Status message from TFHKA API
+</ResponseField>
+
+<ResponseField name="resultado" type="object">
+  Invoice emission result
+  <ResponseField name="numeroDocumento" type="string">
+    Invoice number (used as unique ID)
+  </ResponseField>
+  <ResponseField name="urlConsulta" type="string">
+    URL to view/download the invoice PDF
+  </ResponseField>
+  <ResponseField name="codigoQR" type="string">
+    Base64-encoded QR code for invoice verification
+  </ResponseField>
+</ResponseField>
+
+### generateBillingFromExpenses
+
+Generates and emits an invoice for event expenses (production costs, services, etc.). This function handles the complete workflow:
+
+1. Retrieves event and client data from Firestore
+2. Gets current exchange rate
+3. Generates sequential invoice number
+4. Calculates tax breakdown (IVA, IGTF)
+5. Emits invoice through TFHKA
+6. Stores invoice record in Firestore
+
+**Endpoint:** `POST /generateBillingFromExpenses`
+
+**Request Body:**
+<ParamField body="event_id" type="string" required>
+  The ID of the event to bill expenses for
+</ParamField>
+
+<ParamField body="expense_type" type="string" required>
+  Type of expense (e.g., "Producción", "Logística", "Marketing")
+</ParamField>
+
+<ParamField body="currency" type="string" required>
+  Currency of the expense items ("USD" or "BSD")
+</ParamField>
+
+<ParamField body="items" type="array" required>
+  Array of expense items to bill
+  <ParamField body="name" type="string">
+    Description of the expense item
+  </ParamField>
+  <ParamField body="amount" type="number">
+    Total amount including IVA (and IGTF if USD)
+  </ParamField>
+</ParamField>
+
+```json
+{
+  "data": {
+    "event_id": "event-456",
+    "expense_type": "Producción",
+    "currency": "USD",
+    "items": [
+      {
+        "name": "Alquiler de equipo de sonido",
+        "amount": 1196.48
+      },
+      {
+        "name": "Escenario y tarima",
+        "amount": 580.00
+      }
+    ]
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "success": true,
+    "message": "Factura emitida y registrada correctamente.",
+    "invoice_id": "00000124",
+    "invoice_url": "https://demoemisionv2.thefactoryhka.com.ve/invoice/00000124",
+    "full_api_response": {
+      "mensaje": "Documento emitido correctamente",
+      "resultado": {}
+    }
+  }
+}
+```
+
+<ResponseField name="success" type="boolean">
+  Whether the invoice was successfully created
+</ResponseField>
+
+<ResponseField name="invoice_id" type="string">
+  The generated invoice number
+</ResponseField>
+
+<ResponseField name="invoice_url" type="string">
+  Direct URL to view/download the invoice
+</ResponseField>
+
+## Invoice Data Structure
+
+### Document Identification
+
+Every invoice includes identification metadata:
+
+```json
+{
+  "IdentificacionDocumento": {
+    "TipoDocumento": "01",
+    "NumeroDocumento": "00000123",
+    "FechaEmision": "13/03/2026",
+    "FechaVencimiento": "13/03/2026",
+    "HoraEmision": "10:30:00 am",
+    "Anulado": false,
+    "TipoDePago": "Inmediato",
+    "Serie": "",
+    "TipoDeVenta": "Interna",
+    "Moneda": "BSD"
+  }
+}
+```
+
+<ParamField path="TipoDocumento" type="string">
+  Document type code ("01" = Invoice)
+</ParamField>
+
+<ParamField path="NumeroDocumento" type="string">
+  8-digit sequential invoice number (e.g., "00000123")
+</ParamField>
+
+<ParamField path="Moneda" type="string">
+  Primary currency (always "BSD" for Venezuelan Bolívares)
+</ParamField>
+
+### Buyer Information
+
+Customer or client details:
+
+```json
+{
+  "Comprador": {
+    "TipoIdentificacion": "J",
+    "NumeroIdentificacion": "123456789",
+    "RazonSocial": "Empresa Ejemplo C.A.",
+    "Direccion": "Caracas, Venezuela",
+    "Pais": "VE",
+    "Telefono": ["+58-212-1234567"],
+    "Correo": ["contacto@ejemplo.com"]
+  }
+}
+```
+
+<ParamField path="TipoIdentificacion" type="string">
+  ID type: "V" (natural person), "J" (legal entity), "E" (foreign), "P" (passport)
+</ParamField>
+
+<ParamField path="NumeroIdentificacion" type="string">
+  Tax ID or identification number
+</ParamField>
+
+<ParamField path="RazonSocial" type="string">
+  Legal or commercial name
+</ParamField>
+
+### Third Party (Tercero)
+
+For ticket sales, the event producer/organizer information:
+
+```json
+{
+  "Tercero": {
+    "tipoIdentificacion": "J",
+    "numeroIdentificacion": "987654321",
+    "razonSocial": "Productora de Eventos C.A.",
+    "direccion": "Av. Principal, Caracas",
+    "tipo": "PRODUCTORA",
+    "correo": ["info@productora.com"]
+  }
+}
+```
+
+### Totals and Tax Calculation
+
+The system automatically calculates:
+
+<Steps>
+  <Step title="Subtotal">
+    Base amount before taxes (sum of all item amounts)
+  </Step>
+  <Step title="IVA (16%)">
+    Value Added Tax applied to subtotal
+  </Step>
+  <Step title="IGTF (3%)">
+    Large Financial Transaction Tax (only for USD payments)
+  </Step>
+  <Step title="Total">
+    Final amount: Subtotal + IVA + IGTF
+  </Step>
+</Steps>
+
+```json
+{
+  "Totales": {
+    "NroItems": "2",
+    "MontoGravadoTotal": "100.00",
+    "MontoExentoTotal": "0.00",
+    "Subtotal": "100.00",
+    "TotalIVA": "16.00",
+    "TotalAPagar": "119.48",
+    "MontoTotalConIVA": "116.00",
+    "MontoEnLetras": "CIENTO DIECINUEVE BOLÍVARES CON CUARENTA Y OCHO CÉNTIMOS",
+    "ImpuestosSubtotal": [
+      {
+        "CodigoTotalImp": "G",
+        "AlicuotaImp": "16.00",
+        "BaseImponibleImp": "100.00",
+        "ValorTotalImp": "16.00"
+      },
+      {
+        "CodigoTotalImp": "IGTF",
+        "AlicuotaImp": "3.00",
+        "BaseImponibleImp": "116.00",
+        "ValorTotalImp": "3.48"
+      }
+    ]
+  }
+}
+```
+
+<Note>
+**Tax Calculation Logic:**
+- IVA (16%) is applied to the subtotal
+- IGTF (3%) is applied to the subtotal + IVA when currency is USD
+- All amounts are truncated to 2 decimal places (not rounded)
+- Total must equal the sum of Subtotal + IVA + IGTF
+</Note>
+
+### Multi-Currency Support
+
+Every invoice includes amounts in both BSD and USD:
+
+```json
+{
+  "Totales": {
+    "Moneda": "BSD",
+    "Subtotal": "4520.00",
+    "TotalIVA": "723.20",
+    "TotalAPagar": "5400.78"
+  },
+  "TotalesOtraMoneda": {
+    "Moneda": "USD",
+    "TipoCambio": "45.2000",
+    "Subtotal": "100.00",
+    "TotalIVA": "16.00",
+    "TotalAPagar": "119.48"
+  }
+}
+```
+
+<ParamField path="TipoCambio" type="string">
+  Exchange rate used for conversion (4 decimal places)
+</ParamField>
+
+### Line Items (DetallesItems)
+
+Individual items or services being billed:
+
+```json
+{
+  "DetallesItems": [
+    {
+      "NumeroLinea": "1",
+      "IndicadorBienoServicio": "2",
+      "Descripcion": "Alquiler de equipo de sonido (Producción)",
+      "Cantidad": "1",
+      "UnidadMedida": "4L",
+      "PrecioUnitario": "1000.00",
+      "PrecioItem": "1000.00",
+      "CodigoImpuesto": "G",
+      "TasaIVA": "16",
+      "ValorIVA": "160.00",
+      "ValorTotalItem": "1000.00"
+    }
+  ]
+}
+```
+
+<ParamField path="IndicadorBienoServicio" type="string">
+  "1" for goods, "2" for services
+</ParamField>
+
+<ParamField path="UnidadMedida" type="string">
+  Unit of measure code ("4L" = service unit)
+</ParamField>
+
+<ParamField path="CodigoImpuesto" type="string">
+  Tax code ("G" = general IVA, "E" = exempt)
+</ParamField>
+
+## Tax Calculation Details
+
+### IVA (Value Added Tax)
+
+- **Rate:** 16%
+- **Applied to:** All taxable goods and services
+- **Calculation:** `IVA = Subtotal * 0.16`
+
+### IGTF (Large Financial Transaction Tax)
+
+- **Rate:** 3%
+- **Applied to:** Transactions paid in foreign currency (USD)
+- **Base:** Subtotal + IVA
+- **Calculation:** `IGTF = (Subtotal + IVA) * 0.03`
+- **Truncation:** IGTF is truncated to 2 decimals (not rounded)
+
+<Warning>
+**IGTF Application Rules:**
+- Only applied when `currency = "USD"`
+- For ticket sales: Only on transactions with payment methods "Zelle", "Efectivo Dolares", "Efectivo Divisa"
+- The base cannot exceed the total invoice amount
+</Warning>
+
+### Expense Invoice Calculation
+
+For expenses in USD:
+
+```javascript
+// Input: Total amount with IVA and IGTF included
+const totalAmount = 1196.48; // USD
+
+// Step 1: Remove IGTF (3%)
+const totalWithIVA = totalAmount / 1.03; // 1161.63
+const igtf = totalAmount - totalWithIVA;  // 34.85
+
+// Step 2: Remove IVA (16%)
+const subtotal = totalWithIVA / 1.16;     // 1001.41
+const iva = totalWithIVA - subtotal;       // 160.22
+
+// Step 3: Convert to BSD
+const exchangeRate = 45.20;
+const subtotalBSD = subtotal * exchangeRate;
+const ivaBSD = iva * exchangeRate;
+const igtfBSD = igtf * exchangeRate;
+```
+
+## Sequential Invoice Numbering
+
+Invoice numbers are generated sequentially using a Firestore counter:
+
+**Location:** `/data/invoice_counter`
+
+**Structure:**
+```json
+{
+  "last_number": 123
+}
+```
+
+The system uses a Firestore transaction to atomically:
+1. Read the current `last_number`
+2. Increment by 1
+3. Update the counter
+4. Return the new number
+
+Invoices are formatted as 8-digit strings with leading zeros (e.g., "00000123").
+
+<Note>
+If the invoice counter document doesn't exist at `/data/invoice_counter`, invoice generation will fail. Ensure this document is initialized.
+</Note>
+
+## Invoice Storage
+
+Successfully emitted invoices are stored in Firestore:
+
+**Collection:** `event_invoices`  
+**Document ID:** Invoice number (e.g., "00000124")
+
+**Document Structure:**
+```json
+{
+  "invoice_id": "00000124",
+  "event_id": "event-456",
+  "client_id": "client-789",
+  "expense_type": "Producción",
+  "currency": "USD",
+  "billed_items": [
+    {
+      "name": "Alquiler de equipo de sonido",
+      "amount": 1196.48
+    }
+  ],
+  "created_at": "2026-03-13T10:30:00Z",
+  "api_response": {
+    "mensaje": "Documento emitido correctamente",
+    "resultado": {}
+  },
+  "status": "EMITTED"
+}
+```
+
+## Additional TFHKA Functions
+
+The integration also exposes these TFHKA API endpoints:
+
+### anularDocumento
+
+Annuls (cancels) a previously emitted invoice.
+
+**Endpoint:** `POST /anularDocumento`
+
+### aplicarRetencion
+
+Applies tax withholding to an invoice.
+
+**Endpoint:** `POST /aplicarRetencion`
+
+### estadoDocumento
+
+Checks the status of a specific invoice.
+
+**Endpoint:** `POST /estadoDocumento`
+
+### listadoDocumentos
+
+Retrieves a list of invoices with filtering options.
+
+**Endpoint:** `POST /listadoDocumentos`
+
+### correoEnviar
+
+Sends an invoice via email.
+
+**Endpoint:** `POST /correoEnviar`
+
+### descargaArchivo
+
+Downloads invoice files (PDF, XML, etc.).
+
+**Endpoint:** `POST /descargaArchivo`
+
+<Note>
+These functions are simple proxy endpoints that forward requests to TFHKA with authentication. Refer to TFHKA documentation for detailed request/response formats.
+</Note>
+
+## Error Handling
+
+Common error scenarios:
+
+```json
+{
+  "error": {
+    "message": "Error description",
+    "details": {}
+  }
+}
+```
+
+**Common Errors:**
+
+- **Authentication failure:** Invalid TFHKA credentials
+- **Missing invoice counter:** `/data/invoice_counter` document doesn't exist
+- **Invalid event/client:** Referenced IDs not found in Firestore
+- **Missing exchange rate:** `/data/exchange_rates` not configured
+- **Tax calculation mismatch:** Totals don't match sum of components
+- **TFHKA validation error:** Invoice data doesn't meet TFHKA requirements
+
+## Best Practices
+
+1. **Always validate totals:** Ensure Subtotal + IVA + IGTF = TotalAPagar
+2. **Use truncation not rounding:** Tax amounts must be truncated to 2 decimals
+3. **Store exchange rates:** Maintain historical rates in Firestore for audit trails
+4. **Handle IGTF correctly:** Only apply to USD transactions
+5. **Sequential numbering:** Never manually set invoice numbers
+6. **Store API responses:** Keep full TFHKA responses for reconciliation
+7. **Validate buyer data:** Ensure ID type and number are correct
+8. **Currency consistency:** Amounts in `items` must match the specified `currency`
+
+## Integration Flow
+
+<Steps>
+  <Step title="Initialize Counter">
+    Create `/data/invoice_counter` with `last_number: 0`
+  </Step>
+  <Step title="Configure Exchange Rates">
+    Set up `/data/exchange_rates` with current USD rate
+  </Step>
+  <Step title="Collect Expense Data">
+    Gather expense items with amounts including taxes
+  </Step>
+  <Step title="Call generateBillingFromExpenses">
+    Submit event ID, expense type, currency, and items
+  </Step>
+  <Step title="System Processing">
+    Function retrieves data, calculates taxes, emits invoice
+  </Step>
+  <Step title="Receive Invoice URL">
+    Get invoice ID and URL for viewing/downloading
+  </Step>
+  <Step title="Store and Notify">
+    Invoice saved to Firestore, notify client via email
+  </Step>
+</Steps>

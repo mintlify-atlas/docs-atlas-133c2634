@@ -1,122 +1,142 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "TMT - Sistema de Gestión de Boletería",
+  "theme": "sequoia",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#FF5722",
+    "light": "#FF8A65",
+    "dark": "#E64A19"
   },
-  "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/Zeto96/tmt-doc-5"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/Zeto96/tmt-doc-5"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentación",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Comenzar",
             "pages": [
-              "index",
+              "introduction",
               "quickstart",
-              "development"
+              "architecture"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Autenticación",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "auth/overview",
+              "auth/users"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Módulos Principales",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "modules/events",
+              "modules/tickets",
+              "modules/orders",
+              "modules/transactions"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Pagos y Banca",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "payments/overview",
+              "payments/mercantil",
+              "payments/bdv",
+              "payments/stripe"
+            ]
+          },
+          {
+            "group": "Operaciones",
+            "pages": [
+              "operations/offices",
+              "operations/offline-mode",
+              "operations/access-control"
+            ]
+          },
+          {
+            "group": "Facturación",
+            "pages": [
+              "billing/overview",
+              "billing/digital-invoicing"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "Referencia API",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Usuarios",
             "pages": [
-              "api-reference/introduction"
+              "api/users/create-client",
+              "api/users/create-collaborator",
+              "api/users/create-staff",
+              "api/users/validate-user"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Eventos y Boletos",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/events/tickets-generate",
+              "api/events/tickets-list",
+              "api/events/tickets-lock",
+              "api/events/access-control"
+            ]
+          },
+          {
+            "group": "Órdenes y Transacciones",
+            "pages": [
+              "api/orders/create-order",
+              "api/orders/process-order",
+              "api/orders/order-payout",
+              "api/transactions/validate"
+            ]
+          },
+          {
+            "group": "Pagos",
+            "pages": [
+              "api/payments/mercantil-auth",
+              "api/payments/mercantil-pay",
+              "api/payments/stripe-intent",
+              "api/payments/bdv-conciliation"
+            ]
+          },
+          {
+            "group": "Taquillas",
+            "pages": [
+              "api/offices/validate",
+              "api/offices/offline-sync",
+              "api/offices/virtual-office"
+            ]
+          },
+          {
+            "group": "Indicadores",
+            "pages": [
+              "api/indicators/sales",
+              "api/indicators/distribution",
+              "api/indicators/platform-data"
+            ]
+          },
+          {
+            "group": "Integraciones",
+            "pages": [
+              "api/integrations/seatsio",
+              "api/integrations/billing"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

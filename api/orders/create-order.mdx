@@ -1,0 +1,419 @@
+---
+title: 'Crear Orden'
+api: 'POST /order_created'
+description: 'Crea una nueva orden de compra de tickets con transacciones asociadas'
+---
+
+## Descripción
+
+Esta función HTTP crea una nueva orden en el sistema TMT, incluyendo los tickets comprados y las transacciones de pago asociadas. La orden se almacena tanto en Firestore como en PostgreSQL.
+
+<Note>
+  Al crear una orden con `status: true`, se activa automáticamente el trigger `order_process` que:
+  - Genera las transacciones individuales
+  - Actualiza los tickets con información del cliente
+  - Crea el registro en u_users
+  - Ejecuta el split de pagos según la configuración financiera del evento
+</Note>
+
+## Endpoint
+
+```
+POST https://your-region-your-project.cloudfunctions.net/order_created
+```
+
+## Parámetros de Solicitud
+
+<ParamField body="data" type="object" required>
+  Objeto que contiene toda la información de la orden
+  
+  <Expandable title="Propiedades del objeto data">
+    <ParamField body="amount" type="number" required>
+      Monto total de la orden en la moneda base (USD)
+    </ParamField>
+    
+    <ParamField body="event_id" type="string" required>
+      ID del evento al que pertenecen los tickets
+    </ParamField>
+    
+    <ParamField body="event_name" type="string" required>
+      Nombre del evento
+    </ParamField>
+    
+    <ParamField body="office_id" type="string" required>
+      ID de la oficina que procesa la venta
+    </ParamField>
+    
+    <ParamField body="office_name" type="string" required>
+      Nombre de la oficina
+    </ParamField>
+    
+    <ParamField body="status" type="boolean" required>
+      Estado de la orden (true para procesar automáticamente)
+    </ParamField>
+    
+    <ParamField body="client_id" type="string" required>
+      ID del cliente (organizador del evento)
+    </ParamField>
+    
+    <ParamField body="client_name" type="string" required>
+      Nombre del cliente
+    </ParamField>
+    
+    <ParamField body="exchange_rate" type="number" required>
+      Tasa de cambio aplicada (ej: 36.50 para VEF/USD)
+    </ParamField>
+    
+    <ParamField body="box_office_name" type="string" required>
+      Nombre de la taquilla donde se realizó la venta
+    </ParamField>
+    
+    <ParamField body="box_office_id" type="string" required>
+      ID de la taquilla
+    </ParamField>
+    
+    <ParamField body="purchaser_info" type="object">
+      Información del comprador (quien realiza el pago)
+      
+      <Expandable title="Propiedades">
+        <ParamField body="email" type="string">
+          Email del comprador
+        </ParamField>
+        <ParamField body="name" type="string">
+          Nombre completo del comprador
+        </ParamField>
+        <ParamField body="phone" type="string">
+          Teléfono del comprador
+        </ParamField>
+        <ParamField body="id" type="string">
+          Documento de identidad del comprador
+        </ParamField>
+      </Expandable>
+    </ParamField>
+    
+    <ParamField body="recipient_info" type="object">
+      Información del receptor (quien recibe los tickets)
+    </ParamField>
+    
+    <ParamField body="is_courtesy" type="boolean">
+      Indica si es una cortesía (default: false)
+    </ParamField>
+    
+    <ParamField body="is_corporate" type="boolean">
+      Indica si es una venta corporativa (default: false)
+    </ParamField>
+    
+    <ParamField body="is_gift" type="boolean">
+      Indica si es un regalo (default: false)
+    </ParamField>
+    
+    <ParamField body="tickets" type="array" required>
+      Array de tickets incluidos en la orden
+      
+      <Expandable title="Estructura de cada ticket">
+        <ParamField body="id" type="string" required>
+          ID único del ticket
+        </ParamField>
+        <ParamField body="ticket_id" type="string" required>
+          ID del ticket en formato "event_id-ticket_id"
+        </ParamField>
+        <ParamField body="amount" type="number" required>
+          Precio del ticket
+        </ParamField>
+        <ParamField body="metadata" type="object" required>
+          Información del cliente asignado al ticket
+          
+          <Expandable title="Propiedades de metadata">
+            <ParamField body="customer_email" type="string" required>
+              Email del cliente
+            </ParamField>
+            <ParamField body="customer_id" type="string" required>
+              Documento de identidad del cliente
+            </ParamField>
+            <ParamField body="customer_name" type="string" required>
+              Nombre del cliente
+            </ParamField>
+            <ParamField body="customer_phone" type="string" required>
+              Teléfono del cliente
+            </ParamField>
+            <ParamField body="customer_address" type="string">
+              Dirección del cliente
+            </ParamField>
+            <ParamField body="customer_country" type="object">
+              País del cliente
+              <Expandable title="Propiedades">
+                <ParamField body="code" type="string">
+                  Código del país (ej: "ve", "us")
+                </ParamField>
+                <ParamField body="name" type="string">
+                  Nombre del país
+                </ParamField>
+                <ParamField body="key" type="number">
+                  Clave numérica del país
+                </ParamField>
+              </Expandable>
+            </ParamField>
+            <ParamField body="customer_id_type" type="string">
+              Tipo de documento (ej: "V", "E", "J")
+            </ParamField>
+          </Expandable>
+        </ParamField>
+        <ParamField body="status" type="boolean">
+          Estado del ticket (false = disponible para procesar)
+        </ParamField>
+      </Expandable>
+    </ParamField>
+    
+    <ParamField body="transactions" type="array" required>
+      Array de transacciones de pago asociadas a la orden
+      
+      <Expandable title="Estructura de cada transacción">
+        <ParamField body="amount" type="number" required>
+          Monto de la transacción en moneda local
+        </ParamField>
+        <ParamField body="custody_account" type="object" required>
+          Cuenta de custodia donde se recibe el pago
+          
+          <Expandable title="Propiedades">
+            <ParamField body="id" type="string" required>
+              ID de la cuenta de custodia
+            </ParamField>
+            <ParamField body="name" type="string" required>
+              Nombre de la cuenta
+            </ParamField>
+            <ParamField body="account_number" type="string" required>
+              Número de cuenta
+            </ParamField>
+          </Expandable>
+        </ParamField>
+        <ParamField body="payment_data" type="string" required>
+          Datos o referencia del pago (ej: número de referencia, últimos 4 dígitos)
+        </ParamField>
+        <ParamField body="payment_id" type="string" required>
+          ID del método de pago
+        </ParamField>
+        <ParamField body="payment_name" type="string" required>
+          Nombre del método de pago (ej: "Efectivo", "TDC", "Transferencia")
+        </ParamField>
+        <ParamField body="status" type="boolean" required>
+          Estado de la transacción (true = válida)
+        </ParamField>
+        <ParamField body="amount_currency" type="string" required>
+          Código de moneda (ej: "USD", "VEF")
+        </ParamField>
+        <ParamField body="amount_exchange" type="number" required>
+          Monto en moneda de intercambio (USD)
+        </ParamField>
+        <ParamField body="amount_exchange_rate" type="number" required>
+          Tasa de cambio aplicada a esta transacción
+        </ParamField>
+        <ParamField body="point_sale_tmt" type="boolean" required>
+          Indica si es punto de venta TMT (afecta el proceso de split)
+        </ParamField>
+      </Expandable>
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Respuesta
+
+<ResponseField name="message" type="string">
+  Mensaje de confirmación de la operación
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  Código de estado HTTP (200 = éxito, 400 = error)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Datos de respuesta
+  
+  <Expandable title="Propiedades">
+    <ResponseField name="valido" type="boolean">
+      Indica si la operación fue exitosa
+    </ResponseField>
+    
+    <ResponseField name="order" type="string">
+      ID de la orden creada en Firestore
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Ejemplo de Solicitud
+
+```json
+{
+  "data": {
+    "amount": 150.00,
+    "event_id": "evt_abc123",
+    "event_name": "Concierto Rock 2024",
+    "office_id": "ofc_xyz789",
+    "office_name": "Oficina Central",
+    "status": true,
+    "client_id": "client_456",
+    "client_name": "Productora Musical XYZ",
+    "exchange_rate": 36.50,
+    "box_office_name": "Taquilla Principal",
+    "box_office_id": "box_001",
+    "is_courtesy": false,
+    "is_corporate": false,
+    "is_gift": false,
+    "tickets": [
+      {
+        "id": "ticket_001",
+        "ticket_id": "evt_abc123-ticket_001",
+        "amount": 50.00,
+        "metadata": {
+          "customer_email": "juan.perez@email.com",
+          "customer_id": "12345678",
+          "customer_name": "Juan Pérez",
+          "customer_phone": "+58412345678",
+          "customer_address": "Caracas",
+          "customer_country": {
+            "code": "ve",
+            "name": "Venezuela",
+            "key": 0
+          },
+          "customer_id_type": "V"
+        },
+        "status": false
+      }
+    ],
+    "transactions": [
+      {
+        "amount": 1825.00,
+        "custody_account": {
+          "id": "cust_001",
+          "name": "Cuenta Banco Principal",
+          "account_number": "0102-1234-5678"
+        },
+        "payment_data": "1234",
+        "payment_id": "pm_transfer",
+        "payment_name": "Transferencia",
+        "status": true,
+        "amount_currency": "VEF",
+        "amount_exchange": 50.00,
+        "amount_exchange_rate": 36.50,
+        "point_sale_tmt": false
+      },
+      {
+        "amount": 100.00,
+        "custody_account": {
+          "id": "cust_002",
+          "name": "Cuenta USD",
+          "account_number": "0102-9876-5432"
+        },
+        "payment_data": "5678",
+        "payment_id": "pm_card",
+        "payment_name": "TDC",
+        "status": true,
+        "amount_currency": "USD",
+        "amount_exchange": 100.00,
+        "amount_exchange_rate": 1.00,
+        "point_sale_tmt": true
+      }
+    ],
+    "purchaser_info": {
+      "email": "comprador@email.com",
+      "name": "María González",
+      "phone": "+58424567890",
+      "id": "V-87654321"
+    }
+  }
+}
+```
+
+## Ejemplo de Respuesta Exitosa
+
+```json
+{
+  "message": "Orden Creada",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "order": "ord_1a2b3c4d5e6f"
+  }
+}
+```
+
+## Estructura de Datos en Firestore
+
+La orden creada en Firestore contiene:
+
+```javascript
+{
+  amount: 150.00,
+  date: {
+    created: Timestamp,
+    updated: ''
+  },
+  event_id: "evt_abc123",
+  event_name: "Concierto Rock 2024",
+  office_id: "ofc_xyz789",
+  office_name: "Oficina Central",
+  status: true,
+  status_type: {
+    id: "completed",
+    name: "Completada"
+  },
+  tickets: [...],
+  transactions: [...],
+  client_id: "client_456",
+  client_name: "Productora Musical XYZ",
+  exchange_rate: 36.50,
+  box_office_name: "Taquilla Principal",
+  box_office_id: "box_001",
+  purchaser_info: {...},
+  recipient_info: null,
+  is_courtesy: false,
+  is_corporate: false,
+  is_gift: false
+}
+```
+
+<Warning>
+  Las transacciones se almacenan con timestamps automáticos. El campo `date.created` se establece con `Timestamp.now()` al momento de la creación.
+</Warning>
+
+## Proceso Automático Post-Creación
+
+Cuando se crea una orden con `status: true`, el sistema ejecuta automáticamente:
+
+1. **order_process** (Firestore Trigger)
+   - Valida el monto total vs suma de transacciones
+   - Actualiza tickets con información del cliente
+   - Genera transacciones individuales
+   - Crea/actualiza registro en u_users
+   - Ejecuta el split de pagos según configuración financiera
+
+2. **Split de Pagos** (solo si `point_sale_tmt: false`)
+   - Calcula costos fijos y variables
+   - Crea registros en orders_payout
+   - Distribuye entre TMT y Cliente según porcentajes configurados
+
+3. **Conciliación** (si `point_sale_tmt: true`)
+   - Envía transacción a proceso de conciliación
+   - El split se ejecuta después de conciliar
+
+## Ubicación en Código
+
+**Función:** `order_created`  
+**Archivo:** `functions/orders/order.js:47-125`  
+**Tipo:** HTTP Request Function
+
+## Casos de Uso
+
+- Venta de tickets en taquilla física
+- Venta en línea a través del portal
+- Ventas corporativas
+- Emisión de cortesías
+- Ventas con múltiples métodos de pago
+- Ventas en múltiples monedas
+
+## Consideraciones
+
+- El `status_type` siempre se establece como "completed" al crear la orden
+- Se requiere al menos una transacción válida
+- El `exchange_rate` debe ser mayor a 0
+- Los IDs de tickets deben seguir el formato "event_id-ticket_id"
+- La función guarda tanto en Firestore como en PostgreSQL para redundancia

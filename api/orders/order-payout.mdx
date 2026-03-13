@@ -1,0 +1,305 @@
+---
+title: 'Order Payout'
+api: 'TRIGGER onDocumentCreated(orders_payout/{id})'
+description: 'Trigger automático que procesa un nuevo registro de pago (payout) y agrega referencias de pago para payouts automáticos'
+---
+
+## Descripción
+
+Este trigger de Firestore se ejecuta automáticamente cuando se crea un nuevo documento en la colección `orders_payout`. Su función principal es agregar información de referencia de pago para los payouts que NO son manuales (generalmente los generados por procesos automáticos de conciliación).
+
+<Note>
+  Este es un trigger automático que NO debe ser llamado directamente. Se ejecuta cuando `order_process` o `for_conciliation` crean registros en `orders_payout`.
+</Note>
+
+## Función del Trigger
+
+**Nombre:** `order_payout`  
+**Tipo:** Firestore onDocumentCreated Trigger  
+**Colección:** `orders_payout/{id}`  
+**Archivo:** `functions/orders/order.js:435-457`
+
+## Flujo de Ejecución
+
+### 1. Validación del Documento
+
+```javascript
+const snapshot = event.data;
+if (!snapshot) {
+  return;
+}
+const data = snapshot.data();
+let orderspayout_id = event.params.id;
+```
+
+El trigger obtiene el ID del documento recién creado y sus datos.
+
+### 2. Verificación del Tipo de Payout
+
+```javascript
+if (data.payout_type != "Manual") {
+  // Solo procesa payouts NO manuales
+}
+```
+
+<Warning>
+  El trigger solo actúa sobre payouts con `payout_type` diferente de "Manual". Los payouts manuales (creados por el split en order_process) no reciben referencias automáticas.
+</Warning>
+
+### 3. Creación de Referencia de Pago
+
+Para payouts automáticos, agrega un objeto `payment_reference`:
+
+```javascript
+let payment_reference = {
+  amount: data.amount,
+  date: Timestamp.now(),
+  document: "",
+  reference: "ref ref ref"
+};
+
+await db.collection('orders_payout').doc(orderspayout_id)
+  .update({
+    "payment_reference": payment_reference,
+    "date.updated": Timestamp.now()
+  });
+```
+
+## Estructura de Orders Payout
+
+Un documento en `orders_payout` tiene la siguiente estructura:
+
+```javascript
+{
+  id: "payout_abc123",
+  amount: 50.00,
+  custody_account: {
+    id: "cust_001",
+    name: "Cuenta Principal",
+    account_number: "0102-1234-5678"
+  },
+  date: {
+    created: Timestamp,
+    payout: ""  // Se llena cuando se ejecuta el pago
+  },
+  description: "Pago Costo Fijo" | "Pago Costo Variable",
+  entity: "TMT" | "Cliente",
+  event_id: "evt_abc123",
+  event_name: "Concierto Rock 2024",
+  order_id: "ord_xyz789",
+  payment_id: "pm_transfer",
+  payment_name: "Transferencia",
+  payout_status: false,  // false = pendiente, true = pagado
+  payout_type: "Manual" | "Automatic",
+  client_id: "client_456",
+  client_name: "Productora Musical XYZ",
+  amount_exchange: 50.00,
+  amount_currency: "USD",
+  amount_exchange_rate: 36.50,
+  payment_data: {...},
+  payment_reference: {  // Solo para payout_type != "Manual"
+    amount: 50.00,
+    date: Timestamp,
+    document: "",
+    reference: "ref ref ref"
+  }
+}
+```
+
+## Tipos de Payout
+
+### Manual
+
+Creados por el proceso de split en `order_process`:
+
+- **Pago Costo Fijo a TMT**
+- **Pago Costo Variable a TMT**
+- **Pago Costo Variable a Cliente**
+
+Estos payouts **NO** reciben `payment_reference` automática.
+
+```javascript
+{
+  payout_type: "Manual",
+  description: "Pago Costo Fijo",
+  entity: "TMT",
+  payout_status: false
+  // No tiene payment_reference hasta que se procese manualmente
+}
+```
+
+### Automatic
+
+Creados por procesos de conciliación automática para pagos con tarjeta:
+
+- Generados después de conciliar transacciones de punto de venta TMT
+- Reciben `payment_reference` automáticamente
+
+```javascript
+{
+  payout_type: "Automatic",
+  description: "Pago Conciliado",
+  entity: "TMT",
+  payout_status: false,
+  payment_reference: {
+    amount: 100.00,
+    date: Timestamp(2024-03-15),
+    document: "",
+    reference: "ref ref ref"
+  }
+}
+```
+
+## Payment Reference
+
+El objeto `payment_reference` contiene:
+
+<ParamField body="amount" type="number">
+  Monto del pago (copia del amount del payout)
+</ParamField>
+
+<ParamField body="date" type="Timestamp">
+  Fecha en que se creó la referencia
+</ParamField>
+
+<ParamField body="document" type="string">
+  Documento asociado al pago (vacío por defecto)
+</ParamField>
+
+<ParamField body="reference" type="string">
+  Referencia del pago (placeholder "ref ref ref" por defecto)
+</ParamField>
+
+<Note>
+  Los valores por defecto ("ref ref ref") son placeholders. En una implementación completa, estos deberían ser reemplazados con referencias reales del sistema de pagos.
+</Note>
+
+## Ejemplo de Flujo Completo
+
+### Escenario 1: Pago Manual (Split)
+
+1. Cliente crea orden con transferencia bancaria (`point_sale_tmt: false`)
+2. `order_process` ejecuta el split y crea 3 payouts:
+   - Payout 1: Costo Fijo TMT (payout_type: "Manual")
+   - Payout 2: Costo Variable TMT (payout_type: "Manual")
+   - Payout 3: Costo Variable Cliente (payout_type: "Manual")
+3. `order_payout` trigger se ejecuta 3 veces
+4. **NO agrega** `payment_reference` porque son "Manual"
+5. Los payouts quedan con `payout_status: false` hasta procesamiento manual
+
+### Escenario 2: Pago Automático (Conciliación)
+
+1. Cliente crea orden con tarjeta TMT (`point_sale_tmt: true`)
+2. `order_process` envía a conciliación
+3. `for_conciliation` procesa y crea payout:
+   - Payout: Conciliación Automática (payout_type: "Automatic")
+4. `order_payout` trigger se ejecuta
+5. **Agrega** `payment_reference` con timestamp y referencia
+6. El payout queda con `payout_status: false` hasta aprobación
+
+## Relación con Otras Funciones
+
+### order_process
+
+Crea la mayoría de los payouts (tipo "Manual") durante el split:
+
+```javascript
+// En order_process (order.js:324)
+var writeorder_payout = await admin.firestore()
+  .collection("orders_payout")
+  .add(order_payout);
+// Esto dispara el trigger order_payout
+```
+
+### for_conciliation
+
+Crea payouts tipo "Automatic" para transacciones de punto de venta TMT.
+
+### invoice_payout_status
+
+Función HTTP que actualiza el `payout_status` a `true` cuando se ejecutan los pagos:
+
+```javascript
+// Marca payouts como pagados
+await dbpostgres.sqltmt(
+  "update",
+  "orders_payout",
+  "payout_status = true, date_updated = '" + moment(Timestamp.now().toDate()).format() + "'",
+  where
+);
+```
+
+## Consultas Útiles
+
+### Obtener payouts pendientes de un evento
+
+```javascript
+const pendingPayouts = await db.collection('orders_payout')
+  .where('event_id', '==', 'evt_abc123')
+  .where('payout_status', '==', false)
+  .get();
+```
+
+### Obtener total a pagar por entidad
+
+```javascript
+const tmtPayouts = await db.collection('orders_payout')
+  .where('entity', '==', 'TMT')
+  .where('payout_status', '==', false)
+  .where('amount_currency', '==', 'USD')
+  .get();
+
+let totalTMT = 0;
+tmtPayouts.forEach(doc => {
+  totalTMT += doc.data().amount;
+});
+```
+
+### Payouts de una orden específica
+
+```javascript
+const orderPayouts = await db.collection('orders_payout')
+  .where('order_id', '==', 'ord_xyz789')
+  .get();
+```
+
+## Ubicación en Código
+
+**Función:** `order_payout`  
+**Archivo:** `functions/orders/order.js:435-457`  
+**Tipo:** Firestore Trigger (onDocumentCreated)  
+**Colección:** `orders_payout/{id}`
+
+## Consideraciones
+
+<Warning>
+  - El trigger solo modifica payouts NO manuales
+  - Los valores "ref ref ref" son placeholders
+  - El `payout_status: false` indica que el pago aún no se ha ejecutado
+  - La referencia se crea pero el pago real requiere acción posterior
+</Warning>
+
+<Note>
+  - Los payouts manuales requieren procesamiento administrativo
+  - El campo `date.payout` se actualiza cuando se ejecuta el pago real
+  - Los payouts se almacenan en Firestore y PostgreSQL
+</Note>
+
+## Estados del Payout
+
+| Estado | payout_status | date.payout | payment_reference | Descripción |
+|--------|---------------|-------------|-------------------|-------------|
+| Creado | false | "" | null o {} | Recién creado por split/conciliación |
+| Referenciado | false | "" | {amount, date, reference} | Solo payouts automáticos |
+| Pagado | true | Timestamp | {amount, date, reference} | Pago ejecutado y confirmado |
+
+## Mejoras Sugeridas
+
+En una implementación de producción, considera:
+
+1. Reemplazar "ref ref ref" con referencias reales del sistema de pagos
+2. Agregar validación del monto vs. disponibilidad en cuenta
+3. Integrar con APIs bancarias para pagos automáticos
+4. Agregar notificaciones cuando se crean payouts
+5. Implementar workflow de aprobación para pagos grandes
+6. Generar documentos (comprobantes) automáticamente

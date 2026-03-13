@@ -1,0 +1,199 @@
+---
+title: 'Crear Cliente'
+api: 'POST https://us-central1-{project-id}.cloudfunctions.net/create_client'
+description: 'Crea un nuevo usuario de tipo cliente en el sistema TMT'
+---
+
+## Descripción
+
+Este endpoint permite crear un nuevo cliente en el sistema. Crea un usuario en Firebase Authentication y almacena los datos del cliente en la colección `u_clients` de Firestore.
+
+## Autenticación
+
+Este endpoint utiliza Firebase Functions con CORS habilitado. Se requiere autenticación mediante Firebase Authentication.
+
+## Request Body
+
+Todos los parámetros deben estar anidados dentro de un objeto `data`:
+
+<ParamField body="data" type="object" required>
+  Objeto que contiene toda la información del cliente
+  
+  <Expandable title="Propiedades del objeto data">
+    <ParamField body="name" type="string" required>
+      Nombre completo del cliente
+    </ParamField>
+    
+    <ParamField body="email" type="string" required>
+      Correo electrónico del cliente (se usa para autenticación)
+    </ParamField>
+    
+    <ParamField body="password" type="string" required>
+      Contraseña para la cuenta del cliente
+    </ParamField>
+    
+    <ParamField body="name_commercial" type="string" required>
+      Nombre comercial de la empresa
+    </ParamField>
+    
+    <ParamField body="phone" type="string" required>
+      Número de teléfono del cliente
+    </ParamField>
+    
+    <ParamField body="status" type="boolean" required>
+      Estado del cliente (activo/inactivo)
+    </ParamField>
+    
+    <ParamField body="id" type="string" required>
+      Número de identificación del cliente
+    </ParamField>
+    
+    <ParamField body="id_type" type="string" required>
+      Tipo de identificación (cédula, pasaporte, etc.)
+    </ParamField>
+    
+    <ParamField body="city" type="string" required>
+      Ciudad del domicilio
+    </ParamField>
+    
+    <ParamField body="country" type="string" required>
+      País del domicilio
+    </ParamField>
+    
+    <ParamField body="line" type="string" required>
+      Dirección completa
+    </ParamField>
+    
+    <ParamField body="zip_code" type="string" required>
+      Código postal
+    </ParamField>
+    
+    <ParamField body="account_type" type="string" required>
+      Tipo de cuenta del cliente
+    </ParamField>
+    
+    <ParamField body="commercial_registry" type="string">
+      Registro comercial de la empresa
+    </ParamField>
+    
+    <ParamField body="last_assembly_minutes" type="string">
+      Última acta de asamblea
+    </ParamField>
+    
+    <ParamField body="fiscal_info" type="object">
+      Información fiscal del cliente
+    </ParamField>
+    
+    <ParamField body="commercial_license" type="string">
+      Licencia comercial
+    </ParamField>
+    
+    <ParamField body="taxpayer_type" type="string">
+      Tipo de contribuyente
+    </ParamField>
+    
+    <ParamField body="legal_representative" type="object">
+      Información del representante legal
+    </ParamField>
+    
+    <ParamField body="contact_person" type="object">
+      Información de la persona de contacto
+    </ParamField>
+    
+    <ParamField body="bank_accounts" type="array">
+      Cuentas bancarias del cliente
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Mensaje descriptivo del resultado de la operación
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  Código de estado HTTP
+  - `200`: Cliente creado exitosamente
+  - `400`: Error al crear el cliente
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Datos de respuesta
+  
+  <Expandable title="Propiedades">
+    <ResponseField name="uid" type="string">
+      ID único del usuario creado en Firebase (solo en caso de éxito)
+    </ResponseField>
+    
+    <ResponseField name="error" type="object">
+      Objeto con información del error (solo en caso de fallo)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Ejemplo de Request
+
+```bash
+curl -X POST https://us-central1-{project-id}.cloudfunctions.net/create_client \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "name": "Juan Pérez",
+      "email": "juan@empresa.com",
+      "password": "SecurePass123",
+      "name_commercial": "Empresa SA",
+      "phone": "+506 1234-5678",
+      "status": true,
+      "id": "1-2345-6789",
+      "id_type": "cedula",
+      "city": "San José",
+      "country": "Costa Rica",
+      "line": "Avenida Central, Calle 10",
+      "zip_code": "10101",
+      "account_type": "business",
+      "commercial_registry": "123456",
+      "taxpayer_type": "juridico",
+      "bank_accounts": []
+    }
+  }'
+```
+
+## Ejemplo de Response Exitoso
+
+```json
+{
+  "message": " Ingresado con el ID: abc123xyz456 .",
+  "status": 200,
+  "data": {
+    "uid": "abc123xyz456"
+  }
+}
+```
+
+## Ejemplo de Response con Error
+
+```json
+{
+  "message": "Error creando nuevo usuario:",
+  "status": 400,
+  "data": {
+    "error": {
+      "code": "auth/email-already-exists",
+      "message": "The email address is already in use by another account."
+    }
+  }
+}
+```
+
+## Errores Comunes
+
+- **400 Bad Request**: Error al crear el usuario (email duplicado, contraseña débil, etc.)
+- **500 Internal Server Error**: Error en el servidor o en la base de datos
+
+## Notas Adicionales
+
+- El endpoint crea automáticamente un documento en la colección `u_clients` de Firestore con el UID del usuario
+- Se inicializan automáticamente los contadores: `collaborators: 0`, `contracts: 0`, `events: 0`
+- La fecha de creación se registra automáticamente usando `Timestamp.now()`
+- El CORS está habilitado con origen `*` (cualquier dominio puede hacer requests)

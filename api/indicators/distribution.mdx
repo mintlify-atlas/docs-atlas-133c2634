@@ -1,0 +1,299 @@
+---
+title: 'Distribution Indicators'
+description: 'API endpoints for tracking sales distribution by office, USB devices, and payment accounts'
+---
+
+## Sold by Office
+
+`POST /sold_by_office`
+
+Retrieves ticket sales data grouped by office (box office/taquilla). Shows the number of tickets and total amount sold at each office location.
+
+### Request Parameters
+
+<ParamField body="event_id" type="string" optional>
+  The unique identifier of the event to filter sales data
+</ParamField>
+
+<ParamField body="from" type="string" optional>
+  Start date for filtering sales (format: YYYY-MM-DD)
+</ParamField>
+
+<ParamField body="to" type="string" optional>
+  End date for filtering sales (format: YYYY-MM-DD)
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Response message description
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="office_sold" type="array">
+    Array of sales data for each office
+    <ResponseField name="event_id" type="string">
+      The event identifier
+    </ResponseField>
+    <ResponseField name="office_name" type="string">
+      Name of the office/box office
+    </ResponseField>
+    <ResponseField name="total_sales" type="number">
+      Number of tickets sold at this office
+    </ResponseField>
+    <ResponseField name="total_amount" type="number">
+      Total monetary amount of sales at this office
+    </ResponseField>
+    <ResponseField name="event_name" type="string">
+      Name of the event
+    </ResponseField>
+  </ResponseField>
+
+  <ResponseField name="total_tickets" type="number">
+    Grand total of all tickets sold across all offices
+  </ResponseField>
+
+  <ResponseField name="total_amount" type="number">
+    Grand total monetary amount across all offices
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```json
+{
+  "data": {
+    "event_id": "evt_123456",
+    "from": "2024-01-01",
+    "to": "2024-01-31"
+  }
+}
+```
+
+### Example Response
+
+```json
+{
+  "message": "Datos cantidad de tickets vendidos por taquillas ",
+  "status": 200,
+  "data": {
+    "office_sold": [
+      {
+        "event_id": "evt_123456",
+        "office_name": "Main Box Office",
+        "total_sales": 450,
+        "total_amount": 11250.00,
+        "event_name": "Concert 2024"
+      },
+      {
+        "event_id": "evt_123456",
+        "office_name": "North Entrance",
+        "total_sales": 320,
+        "total_amount": 8000.00,
+        "event_name": "Concert 2024"
+      }
+    ],
+    "total_tickets": 770,
+    "total_amount": 19250.00
+  }
+}
+```
+
+---
+
+## Sold by USB Devices
+
+`POST /sold_by_usbs`
+
+Retrieves sales data grouped by office with currency exchange information. Shows the total amount sold in different currencies (USD and VEF) at each location.
+
+### Request Parameters
+
+<ParamField body="event_id" type="string" optional>
+  The unique identifier of the event to filter sales data
+</ParamField>
+
+<ParamField body="from" type="string" optional>
+  Start date for filtering sales (format: YYYY-MM-DD)
+</ParamField>
+
+<ParamField body="to" type="string" optional>
+  End date for filtering sales (format: YYYY-MM-DD)
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Response message description
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="office_sold" type="array">
+    Array of sales data for each office with currency information
+    <ResponseField name="event_id" type="string">
+      The event identifier
+    </ResponseField>
+    <ResponseField name="office_name" type="string">
+      Name of the office/box office
+    </ResponseField>
+    <ResponseField name="amount_currency" type="string">
+      Currency code (e.g., "USD", "VEF")
+    </ResponseField>
+    <ResponseField name="total_amount" type="number">
+      Total amount sold in the specified currency (with exchange applied)
+    </ResponseField>
+    <ResponseField name="event_name" type="string">
+      Name of the event
+    </ResponseField>
+  </ResponseField>
+
+  <ResponseField name="total_amount_bs" type="number">
+    Total amount sold in VEF (Venezuelan Bolivares)
+  </ResponseField>
+
+  <ResponseField name="total_amount_usd" type="number">
+    Total amount sold in USD (US Dollars)
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```json
+{
+  "data": {
+    "event_id": "evt_123456",
+    "from": "2024-01-01",
+    "to": "2024-01-31"
+  }
+}
+```
+
+### Example Response
+
+```json
+{
+  "message": "Datos ventas",
+  "status": 200,
+  "data": {
+    "office_sold": [
+      {
+        "event_id": "evt_123456",
+        "office_name": "Main Box Office",
+        "amount_currency": "USD",
+        "total_amount": 8500.00,
+        "event_name": "Concert 2024"
+      },
+      {
+        "event_id": "evt_123456",
+        "office_name": "Main Box Office",
+        "amount_currency": "VEF",
+        "total_amount": 45000.00,
+        "event_name": "Concert 2024"
+      }
+    ],
+    "total_amount_bs": 45000.00,
+    "total_amount_usd": 8500.00
+  }
+}
+```
+
+---
+
+## Money Distribution
+
+`POST /money_distribution`
+
+Retrieves the distribution of money across different custody accounts. Shows how funds are split among various payment accounts or financial custodians.
+
+### Request Parameters
+
+<ParamField body="event_id" type="string" optional>
+  The unique identifier of the event to filter distribution data
+</ParamField>
+
+<ParamField body="from" type="string" optional>
+  Start date for filtering distribution (format: YYYY-MM-DD)
+</ParamField>
+
+<ParamField body="to" type="string" optional>
+  End date for filtering distribution (format: YYYY-MM-DD)
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Response message description
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="distribution" type="array">
+    Array of money distribution across custody accounts
+    <ResponseField name="custody_account_id" type="string">
+      Unique identifier of the custody account
+    </ResponseField>
+    <ResponseField name="custody_account_name" type="string">
+      Name of the custody account or payment provider
+    </ResponseField>
+    <ResponseField name="amount_currency" type="string">
+      Currency code for the amount (e.g., "USD", "VEF")
+    </ResponseField>
+    <ResponseField name="amount" type="number">
+      Total amount allocated to this custody account
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```json
+{
+  "data": {
+    "event_id": "evt_123456",
+    "from": "2024-01-01",
+    "to": "2024-01-31"
+  }
+}
+```
+
+### Example Response
+
+```json
+{
+  "message": "Datos Money Distribution ",
+  "status": 200,
+  "data": {
+    "distribution": [
+      {
+        "custody_account_id": "acc_001",
+        "custody_account_name": "PayPal Business",
+        "amount_currency": "USD",
+        "amount": 15000.00
+      },
+      {
+        "custody_account_id": "acc_002",
+        "custody_account_name": "Bank Account - Checking",
+        "amount_currency": "USD",
+        "amount": 25000.00
+      },
+      {
+        "custody_account_id": "acc_003",
+        "custody_account_name": "Mercantil Bank",
+        "amount_currency": "VEF",
+        "amount": 50000.00
+      }
+    ]
+  }
+}
+```

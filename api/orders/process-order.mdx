@@ -1,0 +1,349 @@
+---
+title: 'Procesar Orden'
+api: 'TRIGGER onDocumentCreated(orders/{id})'
+description: 'Trigger automático que procesa una orden recién creada, actualiza tickets y ejecuta el split financiero'
+---
+
+## Descripción
+
+Este trigger de Firestore se ejecuta automáticamente cuando se crea un nuevo documento en la colección `orders`. Procesa la orden completa, actualiza los tickets con información del cliente, genera transacciones individuales, crea o actualiza el usuario, y ejecuta la división financiera (split) según la configuración del evento.
+
+<Warning>
+  Este es un trigger automático que NO debe ser llamado directamente. Se ejecuta automáticamente al crear una orden con `status: true`.
+</Warning>
+
+## Función del Trigger
+
+**Nombre:** `order_process`  
+**Tipo:** Firestore onDocumentCreated Trigger  
+**Colección:** `orders/{id}`  
+**Archivo:** `functions/orders/order.js:127-433`
+
+## Flujo de Ejecución
+
+### 1. Validación Inicial
+
+```javascript
+if (!snapshot || !data.status) {
+  return; // No procesa si no hay datos o status es false
+}
+```
+
+El trigger solo procesa órdenes con `status: true`.
+
+### 2. Preparación de Transacciones
+
+Crea objetos de transacción para cada pago en la orden:
+
+```javascript
+let TransactionData = {
+  amount: respon.amount,
+  client_id: data.client_id,
+  client_name: data.client_name,
+  date: { created: '', updated: '' },
+  event_id: data.event_id,
+  event_name: data.event_name,
+  office_id: data.office_id,
+  office_name: data.office_name,
+  order_id: event.params.id,
+  payment_data: respon.payment_data,
+  payment_id: respon.payment_id,
+  payment_name: respon.payment_name,
+  amount_currency: respon.amount_currency,
+  amount_exchange: respon.amount_exchange,
+  amount_exchange_rate: respon.amount_exchange_rate,
+  status: true,
+  custody_account: {
+    id: respon.custody_account.id,
+    name: respon.custody_account.name,
+    account_number: respon.custody_account.account_number
+  },
+  point_sale_tmt: respon.point_sale_tmt
+};
+```
+
+### 3. Actualización de Tickets
+
+Actualiza cada ticket con la información del cliente:
+
+```javascript
+batch.update(
+  db.collection('events').doc(arr_ids[0]).collection('tickets').doc(arr_ids[1]),
+  {
+    "customer_email": item.metadata.customer_email,
+    "customer_id": item.metadata.customer_id,
+    "customer_name": item.metadata.customer_name,
+    "customer_phone": item.metadata.customer_phone,
+    "customer_address": item.metadata.customer_address || "",
+    "customer_country": item.metadata.customer_country || { code: "ve", name: "Venezuela", key: 0 },
+    "date.updated": Timestamp.now()
+  }
+);
+```
+
+<Note>
+  Los tickets se actualizan tanto en Firestore como en PostgreSQL para mantener sincronización.
+</Note>
+
+### 4. Generación de Transacciones
+
+Llama a la función `transactions_generate` para crear registros individuales:
+
+```javascript
+create_transactions = httpsCallable(funciones, 'transactions_generate');
+await create_transactions({
+  TransactionData: responses,
+  idorder_id: idorder_id,
+  infotickets: id_tickets,
+  customer_email: customer_email,
+  event_id: data.event_id,
+  users_uid: "1"
+});
+```
+
+### 5. Creación/Actualización de Usuario
+
+Llama a `order_user` para registrar la orden en el perfil del usuario:
+
+```javascript
+create_orderuser = httpsCallable(funciones, 'order_user');
+await create_orderuser({
+  OrderuserData: data_order,
+  idorder_id: idorder_id,
+  customer_email: customer_email,
+  customer_id: customer_id,
+  customer_name: customer_name,
+  customer_phone: customer_phone,
+  customer_address: customer_address,
+  customer_country: customer_country,
+  customer_id_type: customer_id_type
+});
+```
+
+### 6. Split Financiero
+
+Obtiene la configuración financiera del evento y ejecuta la división de pagos:
+
+<Expandable title="Lógica del Split Financiero">
+
+#### Obtención de Configuración
+
+```javascript
+await db.collection("events")
+  .doc(data.event_id)
+  .collection("setup")
+  .doc("financial")
+  .get();
+```
+
+#### Cálculo de Porcentajes
+
+1. **Costos Fijos:** Se calculan primero hasta cubrir el `fixed_cost_balance`
+
+```javascript
+let fixed_cost_dif = dato.fixed_cost_balance - dato.fixed_cost_collected;
+
+if (fixed_cost_dif >= amount) {
+  per_fijo = 100; // Toda la orden va a costo fijo
+} else {
+  per_fijo = (fixed_cost_dif * 100) / amount;
+  per_var = ((amount - fixed_cost_dif) * 100) / amount;
+}
+```
+
+2. **Costos Variables:** Se dividen entre TMT y Cliente según configuración
+
+```javascript
+dato.costs_variables.forEach(async (cost, index) => {
+  if (cost.entity == 'TMT') tmt += cost.value;
+  if (cost.entity == 'Cliente') cliente += cost.value;
+});
+```
+
+#### Generación de Orders Payout
+
+Para cada transacción NO TMT (`point_sale_tmt: false`):
+
+**Pago Costo Fijo (si aplica):**
+```javascript
+order_payout = {
+  amount: pago_tmt_fijo,
+  description: "Pago Costo Fijo",
+  entity: "TMT",
+  payout_type: "Manual",
+  custody_account: {...},
+  event_id: data.event_id,
+  order_id: idorder_id,
+  payment_id: transaction.payment_id,
+  payment_name: transaction.payment_name,
+  payout_status: false,
+  amount_exchange: transaction.amount_exchange,
+  amount_currency: transaction.amount_currency,
+  amount_exchange_rate: transaction.amount_exchange_rate
+};
+```
+
+**Pago Costo Variable TMT:**
+```javascript
+pago_tmt_var = (resto_amount_var * tmt) / 100;
+order_payout.amount = pago_tmt_var;
+order_payout.description = "Pago Costo Variable";
+order_payout.entity = "TMT";
+```
+
+**Pago Costo Variable Cliente:**
+```javascript
+pago_cliente_var = (resto_amount_var * cliente) / 100;
+order_payout.amount = pago_cliente_var;
+order_payout.description = "Pago Costo Variable";
+order_payout.entity = "Cliente";
+```
+
+#### Actualización de Fixed Cost Collected
+
+```javascript
+await db.collection("events")
+  .doc(data.event_id)
+  .collection("setup")
+  .doc("financial")
+  .update({
+    "fixed_cost_collected": FieldValue.increment(order_payout.amount),
+    "date.updated": Timestamp.now()
+  });
+```
+
+</Expandable>
+
+### 7. Proceso de Conciliación (Punto de Venta TMT)
+
+Si la transacción tiene `point_sale_tmt: true`, se envía a conciliación:
+
+```javascript
+if (transaction.point_sale_tmt) {
+  for_conciliation = httpsCallable(funciones, 'for_conciliation');
+  await for_conciliation({
+    idorder_id: idorder_id,
+    customer_email: customer_email,
+    event_id: data.event_id,
+    users_uid: "1",
+    order_payout: order_payout,
+    transaction: transaction
+  });
+}
+```
+
+<Note>
+  Las transacciones de punto de venta TMT (pagos con tarjeta por POS) no ejecutan el split inmediatamente. Primero deben pasar por conciliación bancaria.
+</Note>
+
+## Datos Generados
+
+### Distribution Array
+
+Se actualiza la orden con un array `distribution` que contiene el detalle del split:
+
+```javascript
+await db.collection("orders").doc(idorder_id).update({
+  "distribution": [
+    {
+      amount: 50.00,
+      description: "Pago Costo Fijo",
+      entity: "TMT",
+      payout_id: "payout_001"
+    },
+    {
+      amount: 15.00,
+      description: "Pago Costo Variable",
+      entity: "TMT",
+      payout_id: "payout_002"
+    },
+    {
+      amount: 35.00,
+      description: "Pago Costo Variable",
+      entity: "Cliente",
+      payout_id: "payout_003"
+    }
+  ],
+  "date.updated": Timestamp.now()
+});
+```
+
+## Ejemplo de Configuración Financiera
+
+```javascript
+{
+  fixed_cost_balance: 10000.00,  // Total de costos fijos del evento
+  fixed_cost_collected: 5000.00,  // Ya recolectado
+  costs_fixed: [
+    { name: "Alquiler Venue", value_total: 5000.00 },
+    { name: "Equipo Sonido", value_total: 3000.00 },
+    { name: "Seguridad", value_total: 2000.00 }
+  ],
+  costs_variables: [
+    { name: "Comisión TMT", entity: "TMT", value: 15 },      // 15%
+    { name: "Comisión Gateway", entity: "TMT", value: 5 },   // 5%
+    { name: "Ganancia Cliente", entity: "Cliente", value: 80 } // 80%
+  ]
+}
+```
+
+## Ejemplo de Resultado de Split
+
+Para una orden de **$150 USD** con la configuración anterior:
+
+**Escenario 1:** `fixed_cost_collected = 5000`, faltan $5000 por recolectar
+
+- **100% va a Costo Fijo TMT:** $150.00
+- Costo Variable TMT: $0
+- Costo Variable Cliente: $0
+
+**Escenario 2:** `fixed_cost_collected = 9900`, faltan $100 por recolectar
+
+- **Costo Fijo TMT:** $100.00 (66.67%)
+- **Costo Variable TMT:** $10.00 (20% de $50 = 15% + 5%)
+- **Costo Variable Cliente:** $40.00 (80% de $50)
+
+**Escenario 3:** `fixed_cost_collected = 10000`, costos fijos cubiertos
+
+- Costo Fijo TMT: $0
+- **Costo Variable TMT:** $30.00 (20% de $150)
+- **Costo Variable Cliente:** $120.00 (80% de $150)
+
+## Funciones Relacionadas
+
+- `transactions_generate` - Crea transacciones individuales
+- `order_user` - Gestiona el usuario y su colección de órdenes
+- `for_conciliation` - Procesa pagos TMT para conciliación
+- `order_payout` - Trigger que se ejecuta al crear cada payout
+
+## Consideraciones Importantes
+
+<Warning>
+  - El split solo se ejecuta para transacciones con `point_sale_tmt: false`
+  - Las transacciones TMT van primero a conciliación
+  - El costo fijo se prioriza siempre sobre el variable
+  - Cada transacción puede generar hasta 3 orders_payout (fijo + var TMT + var Cliente)
+</Warning>
+
+<Note>
+  - Los datos se escriben tanto en Firestore como PostgreSQL
+  - El proceso es asíncrono pero secuencial para cada orden
+  - El `fixed_cost_collected` se actualiza en tiempo real
+</Note>
+
+## Ubicación en Código
+
+**Función:** `order_process`  
+**Archivo:** `functions/orders/order.js:127-433`  
+**Tipo:** Firestore Trigger (onDocumentCreated)  
+**Colección:** `orders/{id}`
+
+## Proceso de Depuración
+
+Para depurar problemas en el procesamiento:
+
+1. Verificar logs en Firebase Console
+2. Revisar que `status: true` en la orden
+3. Validar configuración financiera del evento
+4. Verificar que las transacciones tengan todos los campos requeridos
+5. Comprobar que los tickets existan y estén disponibles

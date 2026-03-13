@@ -1,0 +1,250 @@
+---
+title: 'Office Management'
+description: 'Office validation and PIN security system for ticket offices'
+---
+
+## Overview
+
+The TMT office management system provides secure access control for ticket offices through PIN validation and collaborator authentication. This system ensures that only authorized personnel can access and operate ticket offices.
+
+## Office Validation Workflow
+
+<Steps>
+  <Step title="Collaborator Verification">
+    The system first validates that the collaborator exists and is active for the specific office
+  </Step>
+  
+  <Step title="PIN Authentication">
+    Once the collaborator is verified, the system validates the provided PIN against the office security settings
+  </Step>
+  
+  <Step title="Access Grant">
+    If both validations pass, access is granted and the timestamp is updated
+  </Step>
+</Steps>
+
+## Data Structures
+
+### Office Security Schema
+
+```javascript
+{
+  "date": {
+    "created": Timestamp,
+    "updated": Timestamp
+  },
+  "pin": "string"
+}
+```
+
+### Collaborator Schema
+
+```javascript
+{
+  "status": boolean,
+  // Additional collaborator fields
+}
+```
+
+## Functions
+
+### office_validate
+
+Validates office access by verifying collaborator status and PIN authentication.
+
+**Endpoint:** `POST /office_validate`
+
+**Request Body:**
+
+```json
+{
+  "data": {
+    "idoffice": "office_id",
+    "pin": "1234",
+    "idcollaborators": "collaborator_id"
+  }
+}
+```
+
+**Implementation:**
+
+```javascript
+const collaborator = await db.collection("offices").doc(doc)
+    .collection("collaborators").doc(idcollaborators)
+    .get();
+
+if(collaborator.data()){
+  if(collaborator.data().status){
+    const office = await db.collection("offices").doc(doc)
+        .collection("security")
+        .where("pin", "==", pin)
+        .get();
+    
+    if(office._size > 0){
+      await admin
+        .firestore()
+        .collection("offices").doc(doc)
+        .collection("security").doc("access_pin")
+        .update({ "date.updated": Timestamp.now()});
+      // Access granted
+    }
+  }
+}
+```
+
+**Response:**
+
+<CodeGroup>
+
+```json Success
+{
+  "message": "Oficce allowed",
+  "status": 200,
+  "data": {
+    "valido": true
+  }
+}
+```
+
+```json Invalid PIN
+{
+  "message": "Oficce not allowed",
+  "status": 400,
+  "data": {
+    "valido": false
+  }
+}
+```
+
+```json Inactive Collaborator
+{
+  "message": "Usuario no activo en la taquilla",
+  "status": 400,
+  "data": {
+    "valido": false
+  }
+}
+```
+
+```json Unassigned Collaborator
+{
+  "message": "Usuario no asociado con la taquilla",
+  "status": 400,
+  "data": {
+    "valido": false
+  }
+}
+```
+
+</CodeGroup>
+
+### office_pin_set
+
+Sets or updates the security PIN for an office.
+
+**Endpoint:** `POST /office_pin_set`
+
+**Request Body:**
+
+```json
+{
+  "data": {
+    "idoffice": "office_id",
+    "pin": "1234"
+  }
+}
+```
+
+**Implementation:**
+
+```javascript
+const setpin = await admin
+  .firestore()
+  .collection("offices").doc(doc)
+  .collection("security").doc("access_pin")
+  .set({ 
+    "date": { 
+      created: Timestamp.now(), 
+      updated: Timestamp.now()
+    }, 
+    pin: pin
+  });
+```
+
+**Response:**
+
+<CodeGroup>
+
+```json Success
+{
+  "message": "Office: Pin Seteado!",
+  "status": 200,
+  "data": {
+    "valido": true
+  }
+}
+```
+
+```json Error
+{
+  "message": "Office: Error al crear",
+  "status": 400,
+  "data": {
+    "valido": false
+  }
+}
+```
+
+</CodeGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Secure PIN Management" icon="lock">
+    - Use strong PINs (avoid simple sequences)
+    - Rotate PINs regularly
+    - Never share PINs between offices
+    - Update PIN timestamp on each access
+  </Card>
+  
+  <Card title="Collaborator Management" icon="users">
+    - Keep collaborator status up to date
+    - Deactivate access immediately when needed
+    - Verify collaborator-office associations
+    - Monitor access patterns
+  </Card>
+</CardGroup>
+
+<Warning>
+  Always verify both collaborator status AND PIN before granting office access. The validation is two-factor: user identity and PIN authentication.
+</Warning>
+
+## Security Considerations
+
+<Note>
+  The `access_pin` document timestamp is updated on every successful validation. This can be used to track last access time and detect unusual access patterns.
+</Note>
+
+### Validation Flow
+
+1. **Collaborator exists** → Check if collaborator document exists for the office
+2. **Status active** → Verify `status` field is `true`
+3. **PIN match** → Query security collection for matching PIN
+4. **Update timestamp** → Record successful access time
+
+<Info>
+  Source: `~/workspace/source/functions/offices/office_validate.js:11-46`
+</Info>
+
+## Error Handling
+
+The system returns specific error messages for different validation failures:
+
+- **Unassigned collaborator**: User document not found in office's collaborators collection
+- **Inactive collaborator**: User exists but `status` is `false`
+- **Invalid PIN**: No matching PIN in office security collection
+- **Success**: Both validations passed and access granted
+
+<Tip>
+  Use the error messages to guide users through the authentication process and provide appropriate UI feedback.
+</Tip>

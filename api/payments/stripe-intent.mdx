@@ -1,0 +1,590 @@
+---
+title: 'Stripe Payment Intent'
+api: 'POST /stripe_create_payment_intent'
+description: 'Crea un Payment Intent de Stripe para procesar pagos con tarjetas internacionales'
+---
+
+## Descripción General
+
+Stripe Payment Intent es el método recomendado para procesar pagos con tarjetas de crédito/débito internacionales. Este endpoint crea un Payment Intent que luego será confirmado desde el frontend usando Stripe Elements o el SDK de Stripe.
+
+<Warning>
+Este endpoint requiere configuración de `STRIPE_SECRET_KEY` en las variables de entorno del sistema.
+</Warning>
+
+## Configuración de Stripe
+
+La integración utiliza:
+
+- **Stripe API Version**: Latest
+- **Secret Key**: Configurada en variables de entorno
+- **Webhook Secret**: Configurado para eventos de webhook
+- **Métodos de Pago Aceptados**: `['card']`
+
+---
+
+## Crear Payment Intent
+
+<api>POST /stripe_create_payment_intent</api>
+
+Crea un nuevo Payment Intent para iniciar el proceso de pago.
+
+### Request
+
+#### Headers
+
+- `Content-Type`: `application/json`
+
+#### Body Parameters
+
+<ParamField body="data" type="object" required>
+  Objeto que contiene los datos del Payment Intent
+  
+  <ParamField body="amount" type="number" required>
+    Monto del pago en la moneda especificada (no en centavos). Ejemplo: `25.99` para USD $25.99
+  </ParamField>
+  
+  <ParamField body="currency" type="string" default="usd">
+    Código de moneda ISO 4217 en minúsculas. Ejemplo: `"usd"`, `"eur"`, `"gbp"`
+  </ParamField>
+  
+  <ParamField body="description" type="string">
+    Descripción del pago. Default: `"Compra de tickets"`
+  </ParamField>
+  
+  <ParamField body="metadata" type="object">
+    Metadatos personalizados para asociar con el pago
+    
+    <ParamField body="order_id" type="string">
+      ID de la orden en tu sistema
+    </ParamField>
+    
+    <ParamField body="customer_email" type="string">
+      Email del cliente
+    </ParamField>
+    
+    <ParamField body="customer_name" type="string">
+      Nombre del cliente
+    </ParamField>
+    
+    <ParamField body="event_id" type="string">
+      ID del evento relacionado
+    </ParamField>
+  </ParamField>
+</ParamField>
+
+### Response
+
+#### Success Response (200)
+
+<ResponseField name="message" type="string">
+  Mensaje de confirmación: `"Procesado"`
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  Código de estado HTTP: `200`
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Datos del Payment Intent creado
+  
+  <ResponseField name="success" type="boolean">
+    Indica si la creación fue exitosa: `true`
+  </ResponseField>
+  
+  <ResponseField name="client_secret" type="string">
+    Client secret para confirmar el pago desde el frontend. Este valor debe pasarse a Stripe.js
+  </ResponseField>
+  
+  <ResponseField name="payment_intent_id" type="string">
+    ID único del Payment Intent generado por Stripe. Formato: `"pi_xxxxx"`
+  </ResponseField>
+</ResponseField>
+
+#### Error Response (400/500)
+
+<ResponseField name="message" type="string">
+  Mensaje de error: `"Error en el Proceso"`
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  Código de estado HTTP: `400` (error de validación) o `500` (error del servidor)
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Descripción detallada del error
+</ResponseField>
+
+### Ejemplo de Uso
+
+<CodeGroup>
+
+```javascript Request
+const axios = require('axios');
+
+const paymentData = {
+  data: {
+    amount: 49.99,
+    currency: "usd",
+    description: "Ticket para Concierto 2025",
+    metadata: {
+      order_id: "ORD-2025-001",
+      customer_email: "[email protected]",
+      customer_name: "Juan Pérez",
+      event_id: "EVT-123"
+    }
+  }
+};
+
+const response = await axios.post(
+  'https://your-domain.com/stripe_create_payment_intent',
+  paymentData
+);
+
+console.log(response.data);
+// Usar el client_secret en el frontend con Stripe.js
+const { client_secret } = response.data.data;
+```
+
+```json Response (Success)
+{
+  "message": "Procesado",
+  "status": 200,
+  "data": {
+    "success": true,
+    "client_secret": "pi_3MtwBwLkdIwHu7ix28a3tqPa_secret_YrKJUKribcBjcG8HVhfZluoGH",
+    "payment_intent_id": "pi_3MtwBwLkdIwHu7ix28a3tqPa"
+  }
+}
+```
+
+```json Response (Error)
+{
+  "message": "Error en el Proceso",
+  "status": 400,
+  "error": "El monto es requerido y debe ser mayor a 0"
+}
+```
+
+</CodeGroup>
+
+---
+
+## Confirmar Payment Intent
+
+<api>POST /stripe_confirm_payment</api>
+
+Confirma un pago que ya fue procesado en el frontend.
+
+### Request
+
+#### Body Parameters
+
+<ParamField body="data" type="object" required>
+  <ParamField body="payment_intent_id" type="string" required>
+    ID del Payment Intent a confirmar. Formato: `"pi_xxxxx"`
+  </ParamField>
+</ParamField>
+
+### Response
+
+#### Success Response (200)
+
+<ResponseField name="message" type="string">
+  Mensaje: `"Procesado"`
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  Código de estado: `200`
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="success" type="boolean">
+    Indica si la confirmación fue exitosa: `true`
+  </ResponseField>
+  
+  <ResponseField name="payment_intent" type="object">
+    Detalles del Payment Intent confirmado
+    
+    <ResponseField name="id" type="string">
+      ID del Payment Intent
+    </ResponseField>
+    
+    <ResponseField name="status" type="string">
+      Estado del pago: `"succeeded"`, `"processing"`, `"requires_payment_method"`, etc.
+    </ResponseField>
+    
+    <ResponseField name="amount" type="number">
+      Monto en la moneda original (no en centavos)
+    </ResponseField>
+    
+    <ResponseField name="currency" type="string">
+      Código de moneda
+    </ResponseField>
+    
+    <ResponseField name="created" type="number">
+      Timestamp Unix de creación
+    </ResponseField>
+    
+    <ResponseField name="payment_method" type="string">
+      ID del método de pago usado
+    </ResponseField>
+    
+    <ResponseField name="charges" type="array">
+      Array de objetos de cargo asociados
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+#### Error Response (400)
+
+<ResponseField name="message" type="string">
+  Mensaje: `"Error en el Proceso"`
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  Código de estado: `400`
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Descripción del error, por ejemplo: `"El pago no fue completado. Estado: requires_payment_method"`
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Información parcial del Payment Intent
+</ResponseField>
+
+### Ejemplo de Uso
+
+<CodeGroup>
+
+```javascript Request
+const confirmData = {
+  data: {
+    payment_intent_id: "pi_3MtwBwLkdIwHu7ix28a3tqPa"
+  }
+};
+
+const response = await axios.post(
+  'https://your-domain.com/stripe_confirm_payment',
+  confirmData
+);
+
+console.log(response.data);
+```
+
+```json Response (Success)
+{
+  "message": "Procesado",
+  "status": 200,
+  "data": {
+    "success": true,
+    "payment_intent": {
+      "id": "pi_3MtwBwLkdIwHu7ix28a3tqPa",
+      "status": "succeeded",
+      "amount": 49.99,
+      "currency": "usd",
+      "created": 1678833149,
+      "payment_method": "pm_1MtwBwLkdIwHu7ix28a3tqPa",
+      "charges": [
+        {
+          "id": "ch_3MtwBwLkdIwHu7ix28a3tqPa",
+          "amount": 4999,
+          "status": "succeeded"
+        }
+      ]
+    }
+  }
+}
+```
+
+```json Response (Error)
+{
+  "message": "Error en el Proceso",
+  "status": 400,
+  "error": "El pago no fue completado. Estado: requires_payment_method",
+  "data": {
+    "payment_intent": {
+      "id": "pi_3MtwBwLkdIwHu7ix28a3tqPa",
+      "status": "requires_payment_method"
+    }
+  }
+}
+```
+
+</CodeGroup>
+
+---
+
+## Obtener Payment Intent
+
+<api>POST /stripe_get_payment_intent</api>
+
+Obtiene información de un Payment Intent existente.
+
+### Request
+
+<ParamField body="data" type="object" required>
+  <ParamField body="payment_intent_id" type="string" required>
+    ID del Payment Intent a consultar
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Mensaje: `"Procesado"`
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  Código de estado: `200`
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="success" type="boolean">
+    `true`
+  </ResponseField>
+  
+  <ResponseField name="payment_intent" type="object">
+    Información resumida del Payment Intent
+    
+    <ResponseField name="id" type="string">
+      ID del Payment Intent
+    </ResponseField>
+    
+    <ResponseField name="status" type="string">
+      Estado actual
+    </ResponseField>
+    
+    <ResponseField name="amount" type="number">
+      Monto
+    </ResponseField>
+    
+    <ResponseField name="currency" type="string">
+      Moneda
+    </ResponseField>
+    
+    <ResponseField name="metadata" type="object">
+      Metadatos asociados
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+### Ejemplo de Uso
+
+<CodeGroup>
+
+```javascript Request
+const response = await axios.post(
+  'https://your-domain.com/stripe_get_payment_intent',
+  {
+    data: {
+      payment_intent_id: "pi_3MtwBwLkdIwHu7ix28a3tqPa"
+    }
+  }
+);
+```
+
+```json Response
+{
+  "message": "Procesado",
+  "status": 200,
+  "data": {
+    "success": true,
+    "payment_intent": {
+      "id": "pi_3MtwBwLkdIwHu7ix28a3tqPa",
+      "status": "succeeded",
+      "amount": 49.99,
+      "currency": "usd",
+      "metadata": {
+        "order_id": "ORD-2025-001",
+        "platform": "TMT"
+      }
+    }
+  }
+}
+```
+
+</CodeGroup>
+
+---
+
+## Webhook de Stripe
+
+<api>POST /stripe_webhook</api>
+
+Endpoint para recibir eventos de Stripe (pagos exitosos, fallidos, etc.).
+
+<Warning>
+Este endpoint debe ser configurado en el Dashboard de Stripe y requiere verificación de firma.
+</Warning>
+
+### Headers
+
+<ParamField header="stripe-signature" type="string" required>
+  Firma del webhook proporcionada por Stripe para verificar la autenticidad
+</ParamField>
+
+### Configuración
+
+1. Configurar `STRIPE_WEBHOOK_SECRET` en las variables de entorno
+2. Añadir la URL del webhook en el Dashboard de Stripe
+3. Seleccionar los eventos a escuchar:
+   - `payment_intent.succeeded`
+   - `payment_intent.payment_failed`
+
+### Eventos Manejados
+
+#### payment_intent.succeeded
+
+Se dispara cuando un pago es completado exitosamente.
+
+```javascript
+// Webhook payload
+{
+  type: 'payment_intent.succeeded',
+  data: {
+    object: {
+      id: 'pi_xxxxx',
+      amount: 4999,
+      status: 'succeeded',
+      metadata: {
+        order_id: 'ORD-123'
+      }
+    }
+  }
+}
+```
+
+#### payment_intent.payment_failed
+
+Se dispara cuando un pago falla.
+
+```javascript
+// Webhook payload
+{
+  type: 'payment_intent.payment_failed',
+  data: {
+    object: {
+      id: 'pi_xxxxx',
+      status: 'failed',
+      last_payment_error: {
+        message: 'Your card was declined'
+      }
+    }
+  }
+}
+```
+
+### Response
+
+<ResponseField name="received" type="boolean">
+  Confirmación de recepción: `true`
+</ResponseField>
+
+### Ejemplo de Configuración
+
+```javascript
+// En tu aplicación, puedes manejar los eventos así:
+
+switch (event.type) {
+  case 'payment_intent.succeeded':
+    const paymentIntent = event.data.object;
+    // Actualizar orden en tu base de datos
+    await updateOrderStatus(paymentIntent.metadata.order_id, 'paid');
+    // Enviar email de confirmación
+    await sendConfirmationEmail(paymentIntent.metadata.customer_email);
+    break;
+    
+  case 'payment_intent.payment_failed':
+    const failedPayment = event.data.object;
+    // Notificar al cliente del fallo
+    await notifyPaymentFailure(failedPayment);
+    break;
+}
+```
+
+---
+
+## Flujo de Pago con Stripe
+
+<Steps>
+  <Step title="Crear Payment Intent">
+    Desde tu backend, llama a `/stripe_create_payment_intent` con el monto y metadatos.
+  </Step>
+  
+  <Step title="Recibir client_secret">
+    El backend retorna un `client_secret` que debes pasar al frontend.
+  </Step>
+  
+  <Step title="Confirmar en el frontend">
+    Usa Stripe.js o Stripe Elements en el frontend para confirmar el pago:
+    
+    ```javascript
+    const stripe = Stripe('pk_test_...');
+    const result = await stripe.confirmCardPayment(client_secret, {
+      payment_method: {
+        card: cardElement,
+        billing_details: {
+          name: 'Juan Pérez'
+        }
+      }
+    });
+    ```
+  </Step>
+  
+  <Step title="Verificar resultado">
+    Si `result.paymentIntent.status === 'succeeded'`, el pago fue exitoso.
+  </Step>
+  
+  <Step title="Confirmar en backend (opcional)">
+    Opcionalmente, llama a `/stripe_confirm_payment` para verificar el estado desde el backend.
+  </Step>
+  
+  <Step title="Webhook notifica el evento">
+    Stripe enviará un evento `payment_intent.succeeded` a tu webhook para confirmar el pago de forma asíncrona.
+  </Step>
+</Steps>
+
+## Estados de Payment Intent
+
+| Estado | Descripción |
+|--------|-------------|
+| `requires_payment_method` | Esperando que el cliente proporcione un método de pago |
+| `requires_confirmation` | Esperando confirmación del pago |
+| `requires_action` | Requiere autenticación 3D Secure u otra acción |
+| `processing` | El pago está siendo procesado |
+| `requires_capture` | El pago fue autorizado y espera captura manual |
+| `canceled` | El Payment Intent fue cancelado |
+| `succeeded` | El pago fue completado exitosamente |
+
+## Conversión de Montos
+
+<Warning>
+  **Importante sobre montos**
+  
+  - El endpoint acepta montos en la moneda original (ej: `49.99` USD)
+  - Internamente se convierte a centavos multiplicando por 100
+  - Stripe siempre trabaja con montos en centavos
+  - Al recibir respuestas, los montos se dividen entre 100 para mostrar la cantidad original
+</Warning>
+
+## Metadatos Automáticos
+
+Cada Payment Intent incluye metadatos automáticos:
+
+- `platform`: `"TMT"`
+- `timestamp`: Fecha y hora ISO 8601 de creación
+- Además de los metadatos personalizados que proporciones
+
+## Seguridad
+
+- La `STRIPE_SECRET_KEY` nunca debe exponerse en el frontend
+- El `client_secret` es seguro para usar en el frontend
+- Los webhooks deben verificar la firma `stripe-signature`
+- Usar HTTPS en todos los endpoints
+
+## Endpoints Relacionados
+
+- [Pagos Mercantil](/api/payments/mercantil-pay) - Para pagos locales con banco venezolano
+- [Conciliación BDV](/api/payments/bdv-conciliation) - Para conciliar pagos recibidos

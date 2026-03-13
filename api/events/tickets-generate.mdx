@@ -1,0 +1,157 @@
+---
+title: 'Generate Tickets'
+api: 'POST https://us-central1-tmt-system.cloudfunctions.net/tickets_generate'
+description: 'Generate tickets for an event based on configured zones and seat allocation'
+---
+
+## Overview
+
+This endpoint generates tickets for a specific event. It creates tickets for all configured zones with the specified number of seats, storing them in both Firestore and PostgreSQL databases.
+
+## Request
+
+<ParamField body="data" type="object" required>
+  Request data object
+  
+  <ParamField body="data.idevent" type="string" required>
+    The unique identifier of the event for which to generate tickets
+  </ParamField>
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Status message describing the result of the operation
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success, 400 for error)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data object
+  
+  <ResponseField name="data.valido" type="boolean">
+    Indicates whether the operation was successful
+  </ResponseField>
+</ResponseField>
+
+## Ticket Structure
+
+Each generated ticket includes:
+
+- `ticket_id`: Unique identifier (format: `{event_id}-{generated_id}`)
+- `event_id`: Reference to the parent event
+- `event_name`: Name of the event
+- `seat_id`: Seat identifier (format: `{zone_id}-{seat_number}`)
+- `zone`: Zone name
+- `color`: Zone color code
+- `seat_row`: Initial value "por asignar" (to be assigned)
+- `status`: Ticket availability status (initially `true`)
+- `date_start`: Event start date
+- `date_end`: Event end date
+- `ledger`: Activity log with initial "generated" action
+- `date.created`: Ticket creation timestamp
+- `date.updated`: Last update timestamp
+
+<CodeGroup>
+
+```javascript JavaScript
+const response = await fetch(
+  'https://us-central1-tmt-system.cloudfunctions.net/tickets_generate',
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      data: {
+        idevent: 'event_123abc'
+      }
+    })
+  }
+);
+
+const result = await response.json();
+console.log(result);
+```
+
+```bash cURL
+curl -X POST \
+  https://us-central1-tmt-system.cloudfunctions.net/tickets_generate \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "data": {
+      "idevent": "event_123abc"
+    }
+  }'
+```
+
+```python Python
+import requests
+
+url = "https://us-central1-tmt-system.cloudfunctions.net/tickets_generate"
+payload = {
+    "data": {
+        "idevent": "event_123abc"
+    }
+}
+
+response = requests.post(url, json=payload)
+print(response.json())
+```
+
+</CodeGroup>
+
+## Response Examples
+
+### Success Response
+
+```json
+{
+  "message": "Se Generaron: 150",
+  "status": 200,
+  "data": {
+    "valido": true
+  }
+}
+```
+
+### Error Responses
+
+<Expandable title="Event Not Found">
+
+```json
+{
+  "message": "Evento no Encontrado",
+  "status": 400,
+  "data": {
+    "valido": false
+  }
+}
+```
+
+</Expandable>
+
+<Expandable title="Event Not Active">
+
+```json
+{
+  "message": "El evento no esta activo para generar tickets",
+  "status": 200,
+  "data": {
+    "valido": false
+  }
+}
+```
+
+</Expandable>
+
+## Notes
+
+- The endpoint requires the event to have configured zones in the `events/{event_id}/setup/zones` collection
+- Zones must have `status: true` to allow ticket generation
+- Each zone must specify the number of `seats` to generate
+- Tickets are created in batches for performance optimization
+- The ledger field tracks all ticket lifecycle events with timestamps
+- Both Firestore and PostgreSQL databases are updated in the same transaction

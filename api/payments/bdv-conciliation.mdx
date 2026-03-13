@@ -1,0 +1,481 @@
+---
+title: 'Conciliación BDV'
+api: 'POST /conciliation_bdv'
+description: 'Consulta y concilia movimientos bancarios del Banco de Venezuela'
+---
+
+## Descripción General
+
+Este endpoint consulta los movimientos bancarios de la cuenta de Banco de Venezuela (BDV) y los concilia automáticamente en las tablas de conciliación del sistema. Se utiliza para verificar los pagos recibidos y mantener sincronizada la información bancaria.
+
+<Warning>
+Este endpoint requiere configuración de:
+- `cuentabdv`: Número de cuenta de BDV
+- `apibdv`: API Key para el servicio de conciliación de BDV
+</Warning>
+
+## Configuración
+
+La integración utiliza:
+
+- **Endpoint BDV**: `https://bdvconciliacion.banvenez.com/apis/bdv/consulta/movimientos`
+- **Cuenta**: Configurada en `config.cuentabdv`
+- **API Key**: Configurada en `config.apibdv`
+- **Moneda**: VES (Bolívares venezolanos)
+
+---
+
+## Conciliar Movimientos
+
+<api>POST /conciliation_bdv</api>
+
+Consulta los movimientos bancarios del día y los registra en las tablas de conciliación.
+
+### Request
+
+#### Headers
+
+- `Content-Type`: `application/json`
+
+#### Body Parameters
+
+Este endpoint no requiere parámetros en el body. La fecha se calcula automáticamente como la fecha actual.
+
+### Response
+
+#### Success Response (200)
+
+<ResponseField name="message" type="string">
+  Mensaje de confirmación: `"Conciliacion Banco de Venezuela"`
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  Código de estado HTTP: `200`
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Datos de la respuesta de BDV
+  
+  <ResponseField name="status" type="string">
+    Estado de la consulta: `"success"`
+  </ResponseField>
+  
+  <ResponseField name="data" type="object">
+    Información de los movimientos
+    
+    <ResponseField name="movs" type="array">
+      Array de movimientos bancarios
+      
+      <ResponseField name="fecha" type="string">
+        Fecha del movimiento en formato DD/MM/YYYY
+      </ResponseField>
+      
+      <ResponseField name="mov" type="string">
+        Tipo de movimiento: `"CREDITO"` o `"DEBITO"`
+      </ResponseField>
+      
+      <ResponseField name="referencia" type="string">
+        Número de referencia del movimiento
+      </ResponseField>
+      
+      <ResponseField name="importe" type="string">
+        Monto del movimiento (string con formato de número)
+      </ResponseField>
+      
+      <ResponseField name="descripcion" type="string">
+        Descripción del movimiento
+      </ResponseField>
+    </ResponseField>
+    
+    <ResponseField name="saldo_inicial" type="string">
+      Saldo inicial del período consultado
+    </ResponseField>
+    
+    <ResponseField name="saldo_final" type="string">
+      Saldo final del período consultado
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+#### Error Response (400)
+
+<ResponseField name="message" type="string">
+  Mensaje: `"Conciliacion Banco de Venezuela"`
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  Código de estado: `400`
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="status" type="string">
+    Descripción del error
+  </ResponseField>
+</ResponseField>
+
+### Ejemplo de Uso
+
+<CodeGroup>
+
+```javascript Request
+const axios = require('axios');
+
+const response = await axios.post(
+  'https://your-domain.com/conciliation_bdv',
+  {} // Sin parámetros, usa la fecha actual automáticamente
+);
+
+console.log(response.data);
+```
+
+```json Response (Success)
+{
+  "message": "Conciliacion Banco de Venezuela",
+  "status": 200,
+  "data": {
+    "status": "success",
+    "data": {
+      "movs": [
+        {
+          "fecha": "13/03/2026",
+          "mov": "CREDITO",
+          "referencia": "REF123456789",
+          "importe": "150.50",
+          "descripcion": "Pago móvil recibido"
+        },
+        {
+          "fecha": "13/03/2026",
+          "mov": "DEBITO",
+          "referencia": "REF987654321",
+          "importe": "25.00",
+          "descripcion": "Comisión bancaria"
+        }
+      ],
+      "saldo_inicial": "1000.00",
+      "saldo_final": "1125.50"
+    }
+  }
+}
+```
+
+```json Response (Error)
+{
+  "message": "Conciliacion Banco de Venezuela",
+  "status": 400,
+  "data": {
+    "status": "error: No se pudo conectar con el servicio de BDV"
+  }
+}
+```
+
+</CodeGroup>
+
+---
+
+## Consultar Pago Móvil BDV
+
+<api>POST /mobile_payment_bcv</api>
+
+Consulta un pago móvil específico en el sistema de BDV para validar su existencia.
+
+### Request
+
+#### Headers
+
+- `Content-Type`: `application/json`
+- `x-api-key`: API Key de BDV
+
+#### Body Parameters
+
+<ParamField body="data" type="object" required>
+  Datos del pago móvil a consultar
+  
+  <ParamField body="ced_pag" type="string" required>
+    Cédula del pagador. Ejemplo: `"V12345678"`
+  </ParamField>
+  
+  <ParamField body="tel_pag" type="string" required>
+    Teléfono del pagador. Ejemplo: `"04141234567"`
+  </ParamField>
+  
+  <ParamField body="tel_dest" type="string" required>
+    Teléfono del destinatario. Ejemplo: `"04147654321"`
+  </ParamField>
+  
+  <ParamField body="referencia" type="string" required>
+    Número de referencia del pago móvil
+  </ParamField>
+  
+  <ParamField body="fec_pag" type="string" required>
+    Fecha del pago en formato DD/MM/YYYY. Ejemplo: `"13/03/2026"`
+  </ParamField>
+  
+  <ParamField body="importe" type="string" required>
+    Monto del pago. Ejemplo: `"150.50"`
+  </ParamField>
+  
+  <ParamField body="cod_ban_origen" type="string" required>
+    Código del banco de origen. Ejemplo: `"0102"` (BDV)
+  </ParamField>
+</ParamField>
+
+### Response
+
+#### Success Response (200)
+
+<ResponseField name="message" type="string">
+  Mensaje: `"Conciliacion Pago movil BDV"`
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  Código de estado: `200`
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="resultado" type="object">
+    Resultado de la consulta
+    
+    <ResponseField name="existe" type="boolean">
+      Indica si el pago móvil existe en el sistema de BDV
+    </ResponseField>
+    
+    <ResponseField name="validado" type="boolean">
+      Indica si todos los datos coinciden
+    </ResponseField>
+    
+    <ResponseField name="detalles" type="object">
+      Detalles del pago encontrado
+      
+      <ResponseField name="monto" type="string">
+        Monto del pago
+      </ResponseField>
+      
+      <ResponseField name="fecha" type="string">
+        Fecha del pago
+      </ResponseField>
+      
+      <ResponseField name="referencia" type="string">
+        Referencia del pago
+      </ResponseField>
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+#### Error Response (400)
+
+<ResponseField name="message" type="string">
+  Mensaje: `"Conciliacion Pago movil BDV"`
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  Código de estado: `400`
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="error" type="object">
+    Detalles del error
+  </ResponseField>
+</ResponseField>
+
+### Ejemplo de Uso
+
+<CodeGroup>
+
+```javascript Request
+const paymentData = {
+  data: {
+    ced_pag: "V12345678",
+    tel_pag: "04141234567",
+    tel_dest: "04147654321",
+    referencia: "REF123456789",
+    fec_pag: "13/03/2026",
+    importe: "150.50",
+    cod_ban_origen: "0102"
+  }
+};
+
+const response = await axios.post(
+  'https://your-domain.com/mobile_payment_bcv',
+  paymentData
+);
+```
+
+```json Response (Success - Pago Encontrado)
+{
+  "message": "Conciliacion Pago movil BDV",
+  "status": 200,
+  "data": {
+    "resultado": {
+      "existe": true,
+      "validado": true,
+      "detalles": {
+        "monto": "150.50",
+        "fecha": "13/03/2026",
+        "referencia": "REF123456789"
+      }
+    }
+  }
+}
+```
+
+```json Response (Success - Pago No Encontrado)
+{
+  "message": "Conciliacion Pago movil BDV",
+  "status": 200,
+  "data": {
+    "resultado": {
+      "existe": false,
+      "validado": false
+    }
+  }
+}
+```
+
+</CodeGroup>
+
+---
+
+## Proceso de Conciliación
+
+<Steps>
+  <Step title="Consultar movimientos del día">
+    El sistema consulta automáticamente los movimientos de la fecha actual en la cuenta BDV configurada.
+  </Step>
+  
+  <Step title="Filtrar movimientos relevantes">
+    Se filtran únicamente los movimientos de tipo CREDITO y DEBITO, excluyendo otros tipos de registros.
+  </Step>
+  
+  <Step title="Verificar duplicados">
+    Se consulta la tabla `conc_conciliado_b` para verificar que el movimiento no haya sido registrado previamente usando el número de referencia.
+  </Step>
+  
+  <Step title="Registrar en conc_conciliado_b">
+    Cada movimiento único se registra en la tabla de conciliación bancaria con los siguientes datos:
+    - `no_cia`: Número de compañía (1)
+    - `no_cta`: Número de cuenta BDV
+    - `procedencia`: 'A' (Archivo)
+    - `tipo_doc`: 'NC' (Nota de Crédito) o 'ND' (Nota de Débito)
+    - `no_docu`: Referencia del movimiento
+    - `fecha`: Fecha del movimiento
+    - `monto`: Importe del movimiento
+    - `no_fisico`: Referencia
+    - `serie_fisico`: Referencia
+  </Step>
+  
+  <Step title="Registrar débitos en conc_conciliado_c">
+    Los movimientos de tipo DEBITO también se registran en la tabla `conc_conciliado_c` para conciliación de cuentas por cobrar.
+  </Step>
+  
+  <Step title="Retornar resultado">
+    Se retorna la respuesta completa con todos los movimientos procesados y el estado de la conciliación.
+  </Step>
+</Steps>
+
+## Estructura de Datos de Conciliación
+
+### Tabla conc_conciliado_b (Movimientos Bancarios)
+
+| Campo | Descripción |
+|-------|-------------|
+| no_cia | Número de compañía (1) |
+| no_cta | Número de cuenta bancaria |
+| procedencia | Origen del registro: 'A' (Archivo), 'W' (Web) |
+| tipo_doc | Tipo de documento: 'NC' (Crédito), 'ND' (Débito) |
+| no_docu | Número de referencia del movimiento |
+| fecha | Fecha del movimiento |
+| monto | Monto del movimiento |
+| no_fisico | Número físico del documento |
+| serie_fisico | Serie del documento |
+
+### Tabla conc_conciliado_c (Cuentas por Cobrar)
+
+| Campo | Descripción |
+|-------|-------------|
+| no_cia | Número de compañía |
+| no_cta | Número de cuenta |
+| procedencia | Origen del registro: 'W' (Web) |
+| tipo_doc | Tipo de documento: 'ND' |
+| no_docu | Referencia |
+| fecha | Fecha |
+| monto | Monto |
+| no_fisico | Número físico |
+| serie_fisico | Serie |
+
+## Tipos de Movimientos
+
+<Warning>
+  Solo se procesan movimientos de tipo:
+  - **CREDITO**: Depósitos y pagos recibidos
+  - **DEBITO**: Retiros y comisiones
+  
+  Otros tipos de registros son ignorados automáticamente.
+</Warning>
+
+## Automatización
+
+Este endpoint puede ser llamado:
+
+1. **Manualmente**: Desde la interfaz de administración
+2. **Programado**: Mediante un cron job o Cloud Scheduler
+3. **Bajo demanda**: Cuando se necesita verificar un pago específico
+
+### Ejemplo de Cron Job
+
+```javascript
+// Firebase Cloud Functions - Scheduled function
+const functions = require('firebase-functions');
+const axios = require('axios');
+
+exports.dailyBankReconciliation = functions.pubsub
+  .schedule('0 9 * * *') // Todos los días a las 9:00 AM
+  .timeZone('America/Caracas')
+  .onRun(async (context) => {
+    try {
+      await axios.post('https://your-domain.com/conciliation_bdv', {});
+      console.log('Conciliación BDV ejecutada exitosamente');
+    } catch (error) {
+      console.error('Error en conciliación BDV:', error);
+    }
+  });
+```
+
+## Formato de Fechas
+
+- **Request**: La fecha se calcula automáticamente como la fecha actual
+- **Formato usado**: DD/MM/YYYY
+- **Zona horaria**: Basada en la configuración del servidor (timestamp de Firestore)
+- **Conversión**: Se usa `moment.js` para formatear las fechas antes de guardarlas
+
+## Manejo de Errores
+
+Errores comunes:
+
+| Error | Causa | Solución |
+|-------|-------|----------|
+| API Key inválida | `apibdv` no configurada o incorrecta | Verificar la configuración en variables de entorno |
+| Cuenta no encontrada | `cuentabdv` incorrecta | Verificar el número de cuenta |
+| Timeout | Servicio BDV no responde | Reintentar después de unos minutos |
+| Sin movimientos | No hay transacciones en la fecha | Normal, no requiere acción |
+
+## Seguridad
+
+- La API Key de BDV (`apibdv`) debe mantenerse en secreto
+- El endpoint debe estar protegido con autenticación
+- Los logs no deben exponer información sensible de cuentas
+- Usar HTTPS para todas las comunicaciones
+
+## Monitoreo
+
+Se recomienda monitorear:
+
+- Número de movimientos conciliados diariamente
+- Tiempo de respuesta del servicio BDV
+- Errores en la conciliación
+- Movimientos duplicados detectados
+
+## Endpoints Relacionados
+
+- [Pagos Mercantil](/api/payments/mercantil-pay) - Para procesar pagos locales
+- [Stripe Payment Intent](/api/payments/stripe-intent) - Para pagos internacionales
+- [Autenticación Mercantil](/api/payments/mercantil-auth) - Para autorizar pagos

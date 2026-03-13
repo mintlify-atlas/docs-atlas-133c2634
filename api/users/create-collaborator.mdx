@@ -1,0 +1,165 @@
+---
+title: 'Crear Colaborador'
+api: 'POST https://us-central1-{project-id}.cloudfunctions.net/create_collaborator'
+description: 'Crea un nuevo usuario de tipo colaborador en el sistema TMT'
+---
+
+## Descripción
+
+Este endpoint permite crear un nuevo colaborador asociado a un cliente en el sistema. Crea un usuario en Firebase Authentication y almacena los datos del colaborador en la colección `u_collaborators` de Firestore.
+
+## Autenticación
+
+Este endpoint utiliza Firebase Functions con CORS habilitado. Se requiere autenticación mediante Firebase Authentication.
+
+## Request Body
+
+Todos los parámetros deben estar anidados dentro de un objeto `data`:
+
+<ParamField body="data" type="object" required>
+  Objeto que contiene toda la información del colaborador
+  
+  <Expandable title="Propiedades del objeto data">
+    <ParamField body="name" type="string" required>
+      Nombre completo del colaborador
+    </ParamField>
+    
+    <ParamField body="email" type="string" required>
+      Correo electrónico del colaborador (se usa para autenticación)
+    </ParamField>
+    
+    <ParamField body="password" type="string" required>
+      Contraseña para la cuenta del colaborador
+    </ParamField>
+    
+    <ParamField body="phone" type="string" required>
+      Número de teléfono del colaborador
+    </ParamField>
+    
+    <ParamField body="status" type="boolean" required>
+      Estado del colaborador (activo/inactivo)
+    </ParamField>
+    
+    <ParamField body="account_type" type="string" required>
+      Tipo de cuenta del colaborador
+    </ParamField>
+    
+    <ParamField body="client" type="string" required>
+      ID del cliente al que pertenece el colaborador
+    </ParamField>
+    
+    <ParamField body="id" type="string" required>
+      Número de identificación del colaborador
+    </ParamField>
+    
+    <ParamField body="id_type" type="string" required>
+      Tipo de identificación (cédula, pasaporte, etc.)
+    </ParamField>
+    
+    <ParamField body="city" type="string" required>
+      Ciudad del domicilio
+    </ParamField>
+    
+    <ParamField body="country" type="string" required>
+      País del domicilio
+    </ParamField>
+    
+    <ParamField body="line" type="string" required>
+      Dirección completa
+    </ParamField>
+    
+    <ParamField body="zip_code" type="string" required>
+      Código postal
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Mensaje descriptivo del resultado de la operación
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  Código de estado HTTP
+  - `200`: Colaborador creado exitosamente
+  - `400`: Error al crear el colaborador
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Datos de respuesta
+  
+  <Expandable title="Propiedades">
+    <ResponseField name="uid" type="string">
+      ID único del usuario creado en Firebase (solo en caso de éxito)
+    </ResponseField>
+    
+    <ResponseField name="error" type="object">
+      Objeto con información del error (solo en caso de fallo)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Ejemplo de Request
+
+```bash
+curl -X POST https://us-central1-{project-id}.cloudfunctions.net/create_collaborator \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "name": "María González",
+      "email": "maria@empresa.com",
+      "password": "SecurePass123",
+      "phone": "+506 8888-9999",
+      "status": true,
+      "account_type": "collaborator",
+      "client": "abc123xyz456",
+      "id": "1-9876-5432",
+      "id_type": "cedula",
+      "city": "Heredia",
+      "country": "Costa Rica",
+      "line": "Calle Principal, Casa 100",
+      "zip_code": "40101"
+    }
+  }'
+```
+
+## Ejemplo de Response Exitoso
+
+```json
+{
+  "message": " Ingresado con el ID: def456uvw789 .",
+  "status": 200,
+  "data": {
+    "uid": "def456uvw789"
+  }
+}
+```
+
+## Ejemplo de Response con Error
+
+```json
+{
+  "message": "Error creando nuevo usuario:",
+  "status": 400,
+  "data": {
+    "error": {
+      "code": "auth/email-already-exists",
+      "message": "The email address is already in use by another account."
+    }
+  }
+}
+```
+
+## Errores Comunes
+
+- **400 Bad Request**: Error al crear el usuario (email duplicado, contraseña débil, etc.)
+- **500 Internal Server Error**: Error en el servidor o en la base de datos
+
+## Notas Adicionales
+
+- El endpoint crea automáticamente un documento en la colección `u_collaborators` de Firestore con el UID del usuario
+- El colaborador queda asociado al cliente mediante el campo `client` que contiene el UID del cliente
+- La fecha de creación se registra automáticamente usando `Timestamp.now()`
+- El CORS está habilitado con origen `*` (cualquier dominio puede hacer requests)
+- Los colaboradores pueden ser validados posteriormente usando el endpoint `validate_user_email`
