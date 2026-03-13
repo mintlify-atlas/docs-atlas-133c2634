@@ -1,0 +1,170 @@
+{
+  "projectType": "api-service",
+  "projectName": "TMT - Sistema de Gestión de Boletería",
+  "projectDescription": "API de Firebase Cloud Functions para gestión completa de eventos, venta de boletos, pagos y control de acceso",
+  "theme": "sequoia",
+  "primaryColor": "#FF5722",
+  "lightColor": "#FF8A65",
+  "darkColor": "#E64A19",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentación",
+        "groups": [
+          {
+            "group": "Comenzar",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Autenticación",
+            "pages": [
+              "auth/overview",
+              "auth/users"
+            ]
+          },
+          {
+            "group": "Módulos Principales",
+            "pages": [
+              "modules/events",
+              "modules/tickets",
+              "modules/orders",
+              "modules/transactions"
+            ]
+          },
+          {
+            "group": "Pagos y Banca",
+            "pages": [
+              "payments/overview",
+              "payments/mercantil",
+              "payments/bdv",
+              "payments/stripe"
+            ]
+          },
+          {
+            "group": "Operaciones",
+            "pages": [
+              "operations/offices",
+              "operations/offline-mode",
+              "operations/access-control"
+            ]
+          },
+          {
+            "group": "Facturación",
+            "pages": [
+              "billing/overview",
+              "billing/digital-invoicing"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Referencia API",
+        "groups": [
+          {
+            "group": "Usuarios",
+            "pages": [
+              "api/users/create-client",
+              "api/users/create-collaborator",
+              "api/users/create-staff",
+              "api/users/validate-user"
+            ]
+          },
+          {
+            "group": "Eventos y Boletos",
+            "pages": [
+              "api/events/tickets-generate",
+              "api/events/tickets-list",
+              "api/events/tickets-lock",
+              "api/events/access-control"
+            ]
+          },
+          {
+            "group": "Órdenes y Transacciones",
+            "pages": [
+              "api/orders/create-order",
+              "api/orders/process-order",
+              "api/orders/order-payout",
+              "api/transactions/validate"
+            ]
+          },
+          {
+            "group": "Pagos",
+            "pages": [
+              "api/payments/mercantil-auth",
+              "api/payments/mercantil-pay",
+              "api/payments/stripe-intent",
+              "api/payments/bdv-conciliation"
+            ]
+          },
+          {
+            "group": "Taquillas",
+            "pages": [
+              "api/offices/validate",
+              "api/offices/offline-sync",
+              "api/offices/virtual-office"
+            ]
+          },
+          {
+            "group": "Indicadores",
+            "pages": [
+              "api/indicators/sales",
+              "api/indicators/distribution",
+              "api/indicators/platform-data"
+            ]
+          },
+          {
+            "group": "Integraciones",
+            "pages": [
+              "api/integrations/seatsio",
+              "api/integrations/billing"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Gestión completa de eventos y venta de boletos",
+    "Integración con múltiples pasarelas de pago (Mercantil, BDV, Stripe)",
+    "Sistema de taquillas online y offline",
+    "Control de acceso en tiempo real",
+    "Facturación digital automatizada",
+    "Panel de indicadores y reportes",
+    "Integración con Seats.io para mapas de asientos",
+    "Conciliación bancaria automatizada"
+  ],
+  "publicApiSurface": [
+    "create_client",
+    "create_collaborator",
+    "create_staff",
+    "validate_user_platform",
+    "tickets_generate",
+    "tickets_list_event",
+    "tickets_lock",
+    "tickets_unlock",
+    "order_created",
+    "order_process",
+    "transactions_generate",
+    "transactions_validate",
+    "api_mercantil_auth",
+    "api_mercantil_tdd_pay",
+    "api_mercantil_c2p_pay",
+    "stripe_create_payment_intent",
+    "stripe_confirm_payment",
+    "conciliation_bdv",
+    "office_validate",
+    "offline_office_tickets_synchronization",
+    "credentials_access_control_in",
+    "billing_emision",
+    "create_event_seatsio",
+    "hold_seats_seatsio",
+    "money_distribution",
+    "total_sales",
+    "app_list_orders",
+    "app_transfer_tickets"
+  ]
+}
